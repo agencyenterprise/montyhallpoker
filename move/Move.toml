@@ -1,0 +1,11 @@
+[package]
+name = "poker_game"
+version = "1.0.0"
+upgrade_policy = "compatible"
+
+[addresses]
+poker = "0x2c48a1afc19e2fc88c85d28f7449c9fa6ff22ab7165553fcf50ca32d007366fe"
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "randomnet", subdir = "aptos-move/framework/aptos-framework" }
+AptosTokenObjects = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "randomnet", subdir = "aptos-move/framework/aptos-token-objects" }
