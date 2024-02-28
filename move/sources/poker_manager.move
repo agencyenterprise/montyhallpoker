@@ -29,7 +29,7 @@ module poker::poker_manager {
     const GAMESTATE_CLOSED: u64 = 2;
 
     // Stakes
-    const LOW_STAKES: u64 = 5000000; // More or less 0.05 APT
+    const LOW_STAKES: u64 = 5000000; // More or less 0.05 APT (1 APT = $10)
     const MEDIUM_STAKES: u64 = 30000000; // More or less 0.3 APT
     const HIGH_STAKES: u64 = 100000000; // More or less 1 APT
 
@@ -39,7 +39,7 @@ module poker::poker_manager {
         stake: u64,
         pot: u64,
         state: u64,
-        turn: address,
+        turn: vector<address>,
         winner: address,
         players: vector<address>,
     }
@@ -119,7 +119,7 @@ module poker::poker_manager {
             pot: 0,
             state: GAMESTATE_OPEN,
             stake: LOW_STAKES,
-            turn: @0x0,
+            turn: vector::empty(),
             winner: @0x0,
             players: vector::empty(),
         };
@@ -157,7 +157,7 @@ module poker::poker_manager {
             pot: 0,
             state: GAMESTATE_OPEN,
             stake: stake,
-            turn: @0x0,
+            turn: vector::empty(),
             winner: @0x0,
             players: vector::empty(),
         };
@@ -177,7 +177,6 @@ module poker::poker_manager {
         let gamestate = borrow_global_mut<GameState>(@poker);
 
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
-
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
@@ -204,8 +203,8 @@ module poker::poker_manager {
 
 
     // TODO: Continue on this
-    public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
-        let addr = signer::address_of(from);
+    //public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
+        /* let addr = signer::address_of(from);
         let gamestate = borrow_global_mut<GameState>(@poker);
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
         let user_games = borrow_global_mut<UserGames>(addr);
@@ -221,8 +220,8 @@ module poker::poker_manager {
         let amount = game_metadata.stake;
         aptos_account::transfer(@poker, from, amount);
         game_metadata.pot = game_metadata.pot - amount;
-        vector::remove(&mut game_metadata.players, addr);
-    }
+        vector::remove(&mut game_metadata.players, addr); */
+    //}
 
     public entry fun place_bet(from: &signer, amount: u64) {
         /* let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
@@ -282,19 +281,19 @@ module poker::poker_manager {
         coin::register<AptosCoin>(&player3);
         coin::register<AptosCoin>(&player4);
 
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account3), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account4), 300);
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
 
         init_module(admin);
         let game_id = 1;
 
         // Simulate Joining
-        join_game(account1, 1, 50);
-        join_game(account2, 1, 60);
-        join_game(account3, 1, 70);
-        join_game(account4, 1, 80);
+        join_game(account1, 1, 5000000);
+        join_game(account2, 1, 6000000);
+        join_game(account3, 1, 7000000);
+        join_game(account4, 1, 8000000);
 
         // Fetch and Print GameState
         let gamestate = borrow_global<GameState>(@poker); 
@@ -355,20 +354,20 @@ module poker::poker_manager {
         coin::register<AptosCoin>(&player4);
         coin::register<AptosCoin>(&player5);
 
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account3), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account4), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account5), 300);
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account5), 90000000000);
 
         init_module(admin);
 
         // Simulate Joining
-        join_game(account1, 1, 50);
-        join_game(account2, 1, 60);
-        join_game(account3, 1, 70);
-        join_game(account4, 1, 80);
-        join_game(account5, 1, 65); // This should fail because the table is full
+        join_game(account1, 1, 5000000);
+        join_game(account2, 1, 6000000);
+        join_game(account3, 1, 7000000);
+        join_game(account4, 1, 8000000);
+        join_game(account5, 1, 6500000); // This should fail because the table is full
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
@@ -395,7 +394,7 @@ module poker::poker_manager {
         init_module(admin);
 
         // Simulate Joining
-        join_game(account1, 1, 500);
+        join_game(account1, 1, 5000000);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
@@ -416,7 +415,7 @@ module poker::poker_manager {
 
         coin::register<AptosCoin>(&player1);
 
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
 
         init_module(admin);
 
@@ -424,10 +423,10 @@ module poker::poker_manager {
         create_game(admin, 2, LOW_STAKES);
 
         // Simulate Joining
-        join_game(account1, 1, 50);
+        join_game(account1, 1, 5000000);
 
         // Simulate Joining again
-        join_game(account1, 2, 50);
+        join_game(account1, 2, 5000000);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
@@ -454,10 +453,10 @@ module poker::poker_manager {
         coin::register<AptosCoin>(&player3);
         coin::register<AptosCoin>(&player4);
 
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account3), 300);
-        aptos_coin::mint(aptos_framework, signer::address_of(account4), 300);
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
 
         init_module(admin);
 
@@ -465,10 +464,10 @@ module poker::poker_manager {
         create_game(admin, 2, LOW_STAKES);
 
         // Simulate Joining
-        join_game(account1, 1, 50);
-        join_game(account2, 1, 60);
-        join_game(account3, 1, 70);
-        join_game(account4, 1, 80);
+        join_game(account1, 1, 5000000);
+        join_game(account2, 1, 6000000);
+        join_game(account3, 1, 7000000);
+        join_game(account4, 1, 8000000);
 
         // Start game
         start_game(1);
@@ -497,12 +496,12 @@ module poker::poker_manager {
 
         coin::register<AptosCoin>(&player1);
 
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
 
         init_module(admin);
 
         // Simulate Joining
-        join_game(account1, 1, 50);
+        join_game(account1, 1, 5000000);
 
         // Start game
         start_game(1);
@@ -530,7 +529,7 @@ module poker::poker_manager {
 
         coin::register<AptosCoin>(&player1);
 
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
 
         init_module(admin);
 
@@ -538,7 +537,7 @@ module poker::poker_manager {
         create_game(admin, 2, LOW_STAKES);
 
         // Simulate Joining
-        join_game(account1, 1, 50);
+        join_game(account1, 1, 5000000);
 
         // Declare winner
         winner(signer::address_of(account1));
