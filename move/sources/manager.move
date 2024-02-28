@@ -25,11 +25,18 @@ module poker::poker_manager {
     const GAMESTATE_IN_PROGRESS: u64 = 1;
     const GAMESTATE_CLOSED: u64 = 2;
 
-    struct GameMetadata has store {
+    // Stakes
+    const LOW_STAKES: u64 = 25; // 25 cents
+    const MEDIUM_STAKES: u64 = 100; // 1 dollar
+    const HIGH_STAKES: u64 = 1000; // 10 dollars
+
+    struct GameMetadata has store, copy {
         id: u64,
         room_name: string::String,
+        stake: u64,
         pot: u64,
         state: u64,
+        turn: address,
         winner: address,
         players: vector<address>,
     }
@@ -52,7 +59,40 @@ module poker::poker_manager {
 
     public fun assert_uninitialized() {
         assert!(!exists<GameState>(@poker), EALREADY_INITIALIZED);
-    } 
+    }
+
+    public fun assert_account_is_not_in_game(addr: address, game_id: u64) {
+        let user_games = borrow_global<UserGames>(addr);
+        let games = user_games.games;
+        let len = vector::length(&games);
+        if (len > 0) {
+            for (let i = 0; i < len; i = i + 1) {
+                let game = *vector::borrow<u64>(&games, i);
+                assert!(game != game_id, EINVALID_MOVE);
+            }
+        }
+    }
+
+    // Returns the game metadata for a given game id
+    public fun get_game_metadata_by_id(game_id: u64): GameMetadata acquires GameState {
+        let gamestate = borrow_global<GameState>(@poker);
+        let game_metadata_ref = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &game_id);
+        *game_metadata_ref // dereference the value before returning it
+    }
+
+    
+
+    // Returns the current game (latest one) for a given user
+    public fun get_account_current_game(addr: address): u64 acquires UserGames {
+        let user_games = borrow_global<UserGames>(addr);
+        let games = user_games.games;
+        let len = vector::length(&games);
+        if (len > 0) {
+            *vector::borrow<u64>(&games, len - 1)
+        } else {
+            0
+        }
+    }
 
     // Initialize the game state and add the game to the global state
     public fun initialize(acc: &signer) {
@@ -66,10 +106,12 @@ module poker::poker_manager {
         };
 
         let game_metadata = GameMetadata {
-            id: 0,
+            id: 1,
             room_name: string::utf8(b"room1"),
             pot: 0,
             state: GAMESTATE_OPEN,
+            stake: LOW_STAKES,
+            turn: @0x0,
             winner: @0x0,
             players: vector::empty(),
         };
@@ -91,7 +133,7 @@ module poker::poker_manager {
     }
 
     // When user joins and places a bet
-    public entry fun join_game(from: &signer, game_id: u64, amount: u64) acquires GameState {
+    public entry fun join_game(from: &signer, game_id: u64, amount: u64) acquires GameState, UserGames {
         let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
         let addr = signer::address_of(from);
 
@@ -100,6 +142,8 @@ module poker::poker_manager {
         let gamestate = borrow_global_mut<GameState>(@poker);
 
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
+
+
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
@@ -112,10 +156,19 @@ module poker::poker_manager {
         vector::push_back(&mut game_metadata.players, addr);
         game_metadata.pot = game_metadata.pot + amount;
 
+        if (!exists<UserGames>(addr)) {
+            move_to(from, UserGames {
+                games: vector[game_id],
+            })
+        } else {
+            let user_games = borrow_global_mut<UserGames>(addr);
+            vector::push_back(&mut user_games.games, game_id);
+        }
+
     }
 
-    public entry fun place_bet(from: &signer, game_id: u64, amount: u64) acquires GameState {
-        let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
+    public entry fun place_bet(from: &signer, amount: u64) {
+        /* let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
         let addr = signer::address_of(from);
 
         assert!(amount <= from_acc_balance, EINSUFFICIENT_BALANCE);
@@ -126,11 +179,11 @@ module poker::poker_manager {
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
-        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, EINVALID_MOVE);
+        assert!(game_metadata.state == GAMESTATE_OPEN, EINVALID_MOVE);
         
         aptos_account::transfer(from, @poker, amount); 
 
-        game_metadata.pot = game_metadata.pot + amount;
+        game_metadata.pot = game_metadata.pot + amount; */
     }
 
     /*
@@ -155,7 +208,7 @@ module poker::poker_manager {
     #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, account3 = @0x5, account4 = @0x6)]
     fun test_join_game(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
     admin: &signer, aptos_framework: &signer)
-    acquires GameState {
+    acquires GameState, UserGames {
         // Setup 
 
         let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
@@ -178,17 +231,17 @@ module poker::poker_manager {
         aptos_coin::mint(aptos_framework, signer::address_of(account4), 300);
 
         initialize(admin);
-        let game_id = 0;
+        let game_id = 1;
 
         // Simulate Joining
-        join_game(account1, 0, 50);
-        join_game(account2, 0, 60);
-        join_game(account3, 0, 70);
-        join_game(account4, 0, 80);
+        join_game(account1, 1, 50);
+        join_game(account2, 1, 60);
+        join_game(account3, 1, 70);
+        join_game(account4, 1, 80);
 
         // Fetch and Print GameState
         let gamestate = borrow_global<GameState>(@poker); 
-        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &game_id); 
+        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &game_id);
 
         debug::print(&game_metadata.id);
         debug::print(&game_metadata.room_name);
@@ -197,8 +250,22 @@ module poker::poker_manager {
         debug::print(&game_metadata.winner);
         debug::print(&game_metadata.players);
 
+        // Make sure the game is in the global state and has the correct number of players
         assert!(game_metadata.id == copy game_id, 0);
         assert!(vector::length(&game_metadata.players) == 4, 0);
+
+        let user1_games = borrow_global<UserGames>(signer::address_of(account1));
+        let user2_games = borrow_global<UserGames>(signer::address_of(account2));
+        let user3_games = borrow_global<UserGames>(signer::address_of(account3));
+        let user4_games = borrow_global<UserGames>(signer::address_of(account4));
+
+        debug::print(&user1_games.games);
+
+        // Make sure the users have the game in their list of games
+        assert!(vector::length(&user1_games.games) == 1, 0);
+        assert!(vector::length(&user2_games.games) == 1, 0);
+        assert!(vector::length(&user3_games.games) == 1, 0);
+        assert!(vector::length(&user4_games.games) == 1, 0);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
@@ -212,7 +279,7 @@ module poker::poker_manager {
     fun test_join_full_game(account1: &signer, account2: &signer, account3: &signer,
     account4: &signer, account5: &signer,
     admin: &signer, aptos_framework: &signer)
-    acquires GameState {
+    acquires GameState, UserGames {
         // Setup 
 
         let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
@@ -240,11 +307,11 @@ module poker::poker_manager {
         initialize(admin);
 
         // Simulate Joining
-        join_game(account1, 0, 50);
-        join_game(account2, 0, 60);
-        join_game(account3, 0, 70);
-        join_game(account4, 0, 80);
-        join_game(account5, 0, 65); // This should fail because the table is full
+        join_game(account1, 1, 50);
+        join_game(account2, 1, 60);
+        join_game(account3, 1, 70);
+        join_game(account4, 1, 80);
+        join_game(account5, 1, 65); // This should fail because the table is full
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
@@ -256,7 +323,7 @@ module poker::poker_manager {
     #[expected_failure(abort_code = EINSUFFICIENT_BALANCE)]
     fun test_join_without_balance(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
     admin: &signer, aptos_framework: &signer)
-    acquires GameState {
+    acquires GameState, UserGames {
         // Setup 
 
         let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
@@ -281,10 +348,10 @@ module poker::poker_manager {
         initialize(admin);
 
         // Simulate Joining
-        join_game(account1, 0, 50);
-        join_game(account2, 0, 60);
-        join_game(account3, 0, 800); // This should fail because the user doesn't have enough coins
-        join_game(account4, 0, 80);
+        join_game(account1, 1, 50);
+        join_game(account2, 1, 60);
+        join_game(account3, 1, 800); // This should fail because the user doesn't have enough coins
+        join_game(account4, 1, 80);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
