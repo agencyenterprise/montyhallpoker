@@ -21,6 +21,7 @@ module poker::poker_manager {
     const ETABLE_IS_FULL: u64 = 7;
     const EALREADY_IN_GAME: u64 = 8;
     const EGAME_NOT_READY: u64 = 9;
+    const EINSUFFICIENT_BALANCE_FOR_STAKE: u64 = 10;
 
     // Game states
     const GAMESTATE_OPEN: u64 = 0;
@@ -28,9 +29,9 @@ module poker::poker_manager {
     const GAMESTATE_CLOSED: u64 = 2;
 
     // Stakes
-    const LOW_STAKES: u64 = 25; // 25 cents
-    const MEDIUM_STAKES: u64 = 100; // 1 dollar
-    const HIGH_STAKES: u64 = 1000; // 10 dollars
+    const LOW_STAKES: u64 = 5000000; // More or less 0.05 APT
+    const MEDIUM_STAKES: u64 = 30000000; // More or less 0.3 APT
+    const HIGH_STAKES: u64 = 100000000; // More or less 1 APT
 
     struct GameMetadata has store, copy, drop {
         id: u64,
@@ -44,7 +45,7 @@ module poker::poker_manager {
     }
 
     struct GameState has key {
-        games: SimpleMap<u64, GameMetadata>,
+        games: SimpleMap<u64, GameMetadata>
     }
 
     struct UserGames has key {
@@ -102,7 +103,7 @@ module poker::poker_manager {
     }
 
     // Initialize the game state and add the game to the global state
-    public fun initialize(acc: &signer) {
+    fun init_module(acc: &signer) {
         let addr = signer::address_of(acc);
 
         assert_is_owner(addr);
@@ -128,8 +129,7 @@ module poker::poker_manager {
         move_to(acc, gamestate);
     }
 
-    public fun start_game(acc: &signer, game_id: u64) acquires GameState {
-        let addr = signer::address_of(acc);
+    public fun start_game(game_id: u64) acquires GameState {
         let gamestate = borrow_global_mut<GameState>(@poker);
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
         assert!(vector::length(&game_metadata.players) == 4, EGAME_NOT_READY);
@@ -184,6 +184,8 @@ module poker::poker_manager {
         assert!(vector::length(&game_metadata.players) < 4, ETABLE_IS_FULL);
 
         assert!(game_metadata.state == GAMESTATE_OPEN, EGAME_ALREADY_STARTED);
+
+        assert!(amount >= game_metadata.stake, EINSUFFICIENT_BALANCE_FOR_STAKE);
         
         aptos_account::transfer(from, @poker, amount); 
 
@@ -198,7 +200,28 @@ module poker::poker_manager {
             let user_games = borrow_global_mut<UserGames>(addr);
             vector::push_back(&mut user_games.games, game_id);
         }
+    }
 
+
+    // TODO: Continue on this
+    public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
+        let addr = signer::address_of(from);
+        let gamestate = borrow_global_mut<GameState>(@poker);
+        let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+        let user_games = borrow_global_mut<UserGames>(addr);
+        let games = user_games.games;
+        let len = vector::length(&games);
+        let mut new_games = vector::empty();
+        for (games, {i, game}) {
+            if (game != game_id) {
+                vector::push_back(&mut new_games, game);
+            }
+        }
+        user_games.games = new_games;
+        let amount = game_metadata.stake;
+        aptos_account::transfer(@poker, from, amount);
+        game_metadata.pot = game_metadata.pot - amount;
+        vector::remove(&mut game_metadata.players, addr);
     }
 
     public entry fun place_bet(from: &signer, amount: u64) {
@@ -232,7 +255,7 @@ module poker::poker_manager {
     #[test(admin = @poker, nonadmin = @0x5)]
     #[expected_failure(abort_code = EINSUFFICIENT_PERMISSIONS)]
     fun test_create_game_not_admin(nonadmin: &signer, admin: &signer) acquires GameState {
-        initialize(admin);
+        init_module(admin);
 
         create_game(nonadmin, 2, LOW_STAKES);
     }
@@ -264,7 +287,7 @@ module poker::poker_manager {
         aptos_coin::mint(aptos_framework, signer::address_of(account3), 300);
         aptos_coin::mint(aptos_framework, signer::address_of(account4), 300);
 
-        initialize(admin);
+        init_module(admin);
         let game_id = 1;
 
         // Simulate Joining
@@ -338,7 +361,7 @@ module poker::poker_manager {
         aptos_coin::mint(aptos_framework, signer::address_of(account4), 300);
         aptos_coin::mint(aptos_framework, signer::address_of(account5), 300);
 
-        initialize(admin);
+        init_module(admin);
 
         // Simulate Joining
         join_game(account1, 1, 50);
@@ -369,7 +392,7 @@ module poker::poker_manager {
 
         aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
 
-        initialize(admin);
+        init_module(admin);
 
         // Simulate Joining
         join_game(account1, 1, 500);
@@ -395,7 +418,7 @@ module poker::poker_manager {
 
         aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
 
-        initialize(admin);
+        init_module(admin);
 
         // Create game
         create_game(admin, 2, LOW_STAKES);
@@ -436,7 +459,7 @@ module poker::poker_manager {
         aptos_coin::mint(aptos_framework, signer::address_of(account3), 300);
         aptos_coin::mint(aptos_framework, signer::address_of(account4), 300);
 
-        initialize(admin);
+        init_module(admin);
 
         // Create game
         create_game(admin, 2, LOW_STAKES);
@@ -448,7 +471,7 @@ module poker::poker_manager {
         join_game(account4, 1, 80);
 
         // Start game
-        start_game(admin, 1);
+        start_game(1);
 
         let gamestate = borrow_global<GameState>(@poker);
         let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
@@ -476,13 +499,13 @@ module poker::poker_manager {
 
         aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
 
-        initialize(admin);
+        init_module(admin);
 
         // Simulate Joining
         join_game(account1, 1, 50);
 
         // Start game
-        start_game(admin, 1);
+        start_game(1);
 
         let gamestate = borrow_global<GameState>(@poker);
         let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
@@ -509,7 +532,7 @@ module poker::poker_manager {
 
         aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
 
-        initialize(admin);
+        init_module(admin);
 
         // Create game
         create_game(admin, 2, LOW_STAKES);
