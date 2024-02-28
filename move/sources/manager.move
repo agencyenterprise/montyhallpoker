@@ -19,6 +19,8 @@ module poker::poker_manager {
     const EINSUFFICIENT_PERMISSIONS: u64 = 5;
     const EGAME_ALREADY_STARTED: u64 = 6;
     const ETABLE_IS_FULL: u64 = 7;
+    const EALREADY_IN_GAME: u64 = 8;
+    const EGAME_NOT_READY: u64 = 9;
 
     // Game states
     const GAMESTATE_OPEN: u64 = 0;
@@ -30,9 +32,9 @@ module poker::poker_manager {
     const MEDIUM_STAKES: u64 = 100; // 1 dollar
     const HIGH_STAKES: u64 = 1000; // 10 dollars
 
-    struct GameMetadata has store, copy {
+    struct GameMetadata has store, copy, drop {
         id: u64,
-        room_name: string::String,
+        room_id: u64,
         stake: u64,
         pot: u64,
         state: u64,
@@ -61,14 +63,19 @@ module poker::poker_manager {
         assert!(!exists<GameState>(@poker), EALREADY_INITIALIZED);
     }
 
-    public fun assert_account_is_not_in_game(addr: address, game_id: u64) {
-        let user_games = borrow_global<UserGames>(addr);
-        let games = user_games.games;
-        let len = vector::length(&games);
-        if (len > 0) {
-            for (let i = 0; i < len; i = i + 1) {
-                let game = *vector::borrow<u64>(&games, i);
-                assert!(game != game_id, EINVALID_MOVE);
+    public fun assert_account_is_not_in_open_game(addr: address) acquires UserGames, GameState {
+        if (!exists<UserGames>(addr)) {
+            return
+        } else {
+            assert!(exists<UserGames>(addr), EALREADY_IN_GAME);
+            let user_games = borrow_global<UserGames>(addr);
+            let games = user_games.games;
+            let len = vector::length(&games);
+            // if last one is closed, all good
+            if (len > 0) {
+                let last_game_id = *vector::borrow<u64>(&games, len - 1);
+                let game_metadata = get_game_metadata_by_id(last_game_id);
+                assert!(game_metadata.state == GAMESTATE_CLOSED, EALREADY_IN_GAME);
             }
         }
     }
@@ -107,7 +114,7 @@ module poker::poker_manager {
 
         let game_metadata = GameMetadata {
             id: 1,
-            room_name: string::utf8(b"room1"),
+            room_id: 1,
             pot: 0,
             state: GAMESTATE_OPEN,
             stake: LOW_STAKES,
@@ -121,15 +128,41 @@ module poker::poker_manager {
         move_to(acc, gamestate);
     }
 
-    public entry fun create_game(acc: &signer, room_name: string::String) acquires GameState {
+    public fun start_game(acc: &signer, game_id: u64) acquires GameState {
+        let addr = signer::address_of(acc);
+        let gamestate = borrow_global_mut<GameState>(@poker);
+        let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+        assert!(vector::length(&game_metadata.players) == 4, EGAME_NOT_READY);
+        game_metadata.state = GAMESTATE_IN_PROGRESS;
+    }
+
+    public fun winner(winner_address: address) acquires GameState {
+        let gamestate = borrow_global_mut<GameState>(@poker);
+        let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &1);
+        game_metadata.winner = winner_address;
+        game_metadata.state = GAMESTATE_CLOSED;
+    }
+
+    public entry fun create_game(acc: &signer, room_id: u64, stake: u64) acquires GameState {
         let addr = signer::address_of(acc);
         assert_is_initialized();
         assert_is_owner(addr);
 
         let gamestate = borrow_global_mut<GameState>(@poker);
-        let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &0);
 
-        game_metadata.room_name = room_name;
+        // Add a new game to the global state
+        let game_metadata = GameMetadata {
+            id: vector::length<u64>(&simple_map::keys(&gamestate.games)) + 1, // Type parameter after function name
+            room_id: room_id,
+            pot: 0,
+            state: GAMESTATE_OPEN,
+            stake: stake,
+            turn: @0x0,
+            winner: @0x0,
+            players: vector::empty(),
+        };
+
+        simple_map::add(&mut gamestate.games, game_metadata.id, game_metadata);
     }
 
     // When user joins and places a bet
@@ -138,11 +171,12 @@ module poker::poker_manager {
         let addr = signer::address_of(from);
 
         assert!(amount <= from_acc_balance, EINSUFFICIENT_BALANCE);
+        
+        assert_account_is_not_in_open_game(addr);
 
         let gamestate = borrow_global_mut<GameState>(@poker);
 
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
-
 
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
@@ -200,7 +234,7 @@ module poker::poker_manager {
     fun test_create_game_not_admin(nonadmin: &signer, admin: &signer) acquires GameState {
         initialize(admin);
 
-        create_game(nonadmin, string::utf8(b"room1"));
+        create_game(nonadmin, 2, LOW_STAKES);
     }
 
     // Happy path where 4 players join the game normally
@@ -244,7 +278,7 @@ module poker::poker_manager {
         let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &game_id);
 
         debug::print(&game_metadata.id);
-        debug::print(&game_metadata.room_name);
+        debug::print(&game_metadata.room_id);
         debug::print(&game_metadata.pot);
         debug::print(&game_metadata.state);
         debug::print(&game_metadata.winner);
@@ -319,11 +353,68 @@ module poker::poker_manager {
 
     // User tries to join without enough coins
 
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, account3 = @0x5, account4 = @0x6)]
+    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
     #[expected_failure(abort_code = EINSUFFICIENT_BALANCE)]
-    fun test_join_without_balance(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
-    admin: &signer, aptos_framework: &signer)
+    fun test_join_without_balance(account1: &signer, admin: &signer, aptos_framework: &signer)
     acquires GameState, UserGames {
+        // Setup 
+
+        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
+        let aptos_framework_address = signer::address_of(aptos_framework);
+        account::create_account_for_test(aptos_framework_address);
+
+        let player1 = account::create_account_for_test(signer::address_of(account1));
+
+        coin::register<AptosCoin>(&player1);
+
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
+
+        initialize(admin);
+
+        // Simulate Joining
+        join_game(account1, 1, 500);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
+
+    // User cannot join a game if they are already in a in-progress game
+
+    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
+    #[expected_failure(abort_code = EALREADY_IN_GAME)]
+    fun test_join_while_in_game(account1: &signer, admin: &signer, aptos_framework: &signer) acquires GameState, UserGames {
+        // Setup 
+
+        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
+        let aptos_framework_address = signer::address_of(aptos_framework);
+        account::create_account_for_test(aptos_framework_address);
+
+        let player1 = account::create_account_for_test(signer::address_of(account1));
+
+        coin::register<AptosCoin>(&player1);
+
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
+
+        initialize(admin);
+
+        // Create game
+        create_game(admin, 2, LOW_STAKES);
+
+        // Simulate Joining
+        join_game(account1, 1, 50);
+
+        // Simulate Joining again
+        join_game(account1, 2, 50);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
+
+    // When a game starts with 4 players, it should succeed
+
+    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, account3 = @0x5, account4 = @0x6)]
+    fun test_game_starts(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
+    admin: &signer, aptos_framework: &signer) acquires UserGames, GameState {
         // Setup 
 
         let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
@@ -347,11 +438,93 @@ module poker::poker_manager {
 
         initialize(admin);
 
+        // Create game
+        create_game(admin, 2, LOW_STAKES);
+
         // Simulate Joining
         join_game(account1, 1, 50);
         join_game(account2, 1, 60);
-        join_game(account3, 1, 800); // This should fail because the user doesn't have enough coins
+        join_game(account3, 1, 70);
         join_game(account4, 1, 80);
+
+        // Start game
+        start_game(admin, 1);
+
+        let gamestate = borrow_global<GameState>(@poker);
+        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
+
+        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, 0);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
+
+    // When a game starts with less than 4 players, it should fail
+
+    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
+    #[expected_failure(abort_code = EGAME_NOT_READY)]
+    fun test_game_start_fails_too_few(account1: &signer, admin: &signer, aptos_framework: &signer) acquires UserGames, GameState {
+        // Setup 
+
+        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
+        let aptos_framework_address = signer::address_of(aptos_framework);
+        account::create_account_for_test(aptos_framework_address);
+
+        let player1 = account::create_account_for_test(signer::address_of(account1));
+
+        coin::register<AptosCoin>(&player1);
+
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
+
+        initialize(admin);
+
+        // Simulate Joining
+        join_game(account1, 1, 50);
+
+        // Start game
+        start_game(admin, 1);
+
+        let gamestate = borrow_global<GameState>(@poker);
+        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
+
+        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, 0);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
+
+    // When a winner is declared, the game state is updated
+
+    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
+    fun test_winner_declared(account1: &signer, admin: &signer, aptos_framework: &signer) acquires GameState, UserGames {
+        // Setup 
+
+        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
+        let aptos_framework_address = signer::address_of(aptos_framework);
+        account::create_account_for_test(aptos_framework_address);
+
+        let player1 = account::create_account_for_test(signer::address_of(account1));
+
+        coin::register<AptosCoin>(&player1);
+
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
+
+        initialize(admin);
+
+        // Create game
+        create_game(admin, 2, LOW_STAKES);
+
+        // Simulate Joining
+        join_game(account1, 1, 50);
+
+        // Declare winner
+        winner(signer::address_of(account1));
+
+        let gamestate = borrow_global<GameState>(@poker);
+        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
+
+        assert!(game_metadata.winner == signer::address_of(account1), 0);
+        assert!(game_metadata.state == GAMESTATE_CLOSED, 0);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
