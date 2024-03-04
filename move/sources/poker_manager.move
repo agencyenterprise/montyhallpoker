@@ -41,8 +41,8 @@ module poker::poker_manager {
     struct Hand has drop, copy {
         suit: u8,
         value: u8,
-        suit_string: vector<u8>,
-        value_string: vector<u8>,
+        suit_string: string::String,
+        value_string: string::String,
 
     }
     struct Player has drop, copy {
