@@ -9,7 +9,8 @@ import {
 } from "@aptos-labs/wallet-adapter-react";
 import { cn } from "@/utils/styling";
 
-const buttonStyles = "nes-btn is-primary";
+const buttonStyles =
+  "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
 
 export const WalletButtons = () => {
   const { wallets, connected, disconnect, isLoading } = useWallet();
