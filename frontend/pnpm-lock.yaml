@@ -29,6 +29,9 @@ dependencies:
   axios:
     specifier: ^1.6.8
     version: 1.6.8
+  classnames:
+    specifier: ^2.5.1
+    version: 2.5.1
   clsx:
     specifier: ^2.0.0
     version: 2.0.0
@@ -1502,6 +1505,10 @@ packages:
       readdirp: 3.6.0
     optionalDependencies:
       fsevents: 2.3.3
+    dev: false
+
+  /classnames@2.5.1:
+    resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
     dev: false
 
   /client-only@0.0.1:
