@@ -9,6 +9,7 @@ module poker::poker_manager {
     use std::string;
     use std::simple_map::{SimpleMap,Self};
     use aptos_std::debug;
+    use aptos_framework::event;
 
     /// Error codes
     const EINVALID_MOVE: u64 = 0;
@@ -22,6 +23,7 @@ module poker::poker_manager {
     const EALREADY_IN_GAME: u64 = 8;
     const EGAME_NOT_READY: u64 = 9;
     const EINSUFFICIENT_BALANCE_FOR_STAKE: u64 = 10;
+    const ENOT_IN_GAME: u64 = 11;
 
     // Game states
     const GAMESTATE_OPEN: u64 = 0;
@@ -33,6 +35,16 @@ module poker::poker_manager {
     const MEDIUM_STAKES: u64 = 30000000; // More or less 0.3 APT
     const HIGH_STAKES: u64 = 100000000; // More or less 1 APT
 
+    // Actions
+    const FOLD: u64 = 0;
+    const CHECK: u64 = 1;
+    const CALL: u64 = 2;
+    const RAISE: u64 = 3;
+    const ALL_IN: u64 = 4;
+    const BET: u64 = 5;
+
+    // Structs
+
     struct GameMetadata has store, copy, drop {
         id: u64,
         room_id: u64,
@@ -40,6 +52,10 @@ module poker::poker_manager {
         pot: u64,
         state: u64,
         turn: vector<address>,
+        hands: vector<u64>,
+        current_bet: u64,
+        community_cards: vector<u64>,
+        continueBetting: bool,
         winner: address,
         players: vector<address>,
     }
@@ -50,6 +66,38 @@ module poker::poker_manager {
 
     struct UserGames has key {
         games: vector<u64>,
+    }
+
+    // Events
+    #[event]
+    struct PlayerJoinsGame has drop, store {
+        account: address,
+        game_id: u64,
+        amount: u64,
+    }
+
+    #[event]
+    struct PlayerLeavesGame has drop, store {
+        account: address,
+        game_id: u64,
+    }
+
+    #[event]
+    struct PlayerPerformsActionEvent has drop, store {
+        account: address,
+        game_id: u64,
+    }
+
+    #[event]
+    struct GameEndsEvent has drop, store {
+        account: address,
+        game_id: u64,
+    }
+
+    #[event]
+    struct GameStartsEvent has drop, store {
+        account: address,
+        game_id: u64,
     }
 
     public fun assert_is_owner(addr: address) {
@@ -87,8 +135,6 @@ module poker::poker_manager {
         let game_metadata_ref = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &game_id);
         *game_metadata_ref // dereference the value before returning it
     }
-
-    
 
     // Returns the current game (latest one) for a given user
     public fun get_account_current_game(addr: address): u64 acquires UserGames {
@@ -170,6 +216,12 @@ module poker::poker_manager {
         let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
         let addr = signer::address_of(from);
 
+        event::emit(PlayerJoinsGame {
+            account: addr,
+            game_id: game_id,
+            amount: amount,
+        });
+
         assert!(amount <= from_acc_balance, EINSUFFICIENT_BALANCE);
         
         assert_account_is_not_in_open_game(addr);
@@ -201,29 +253,36 @@ module poker::poker_manager {
         }
     }
 
+    public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
+        let addr = signer::address_of(from);
+        assert_is_initialized();
 
-    // TODO: Continue on this
-    //public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
-        /* let addr = signer::address_of(from);
         let gamestate = borrow_global_mut<GameState>(@poker);
+        assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
+
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
-        let user_games = borrow_global_mut<UserGames>(addr);
-        let games = user_games.games;
-        let len = vector::length(&games);
-        let mut new_games = vector::empty();
-        for (games, {i, game}) {
-            if (game != game_id) {
-                vector::push_back(&mut new_games, game);
+
+        let (is_player_in_game, player_index) = vector::index_of(&game_metadata.players, &addr);
+        assert!(is_player_in_game, ENOT_IN_GAME);
+
+        vector::remove(&mut game_metadata.players, player_index);
+
+        event::emit(PlayerLeavesGame {
+            account: addr,
+            game_id: game_id
+        });
+
+        if (exists<UserGames>(addr)) {
+            let user_games = borrow_global_mut<UserGames>(addr);
+            (is_player_in_game, player_index) = vector::index_of(&user_games.games, &game_id);
+            if (is_player_in_game) {
+                let game_index = player_index;
+                vector::remove(&mut user_games.games, game_index);
             }
         }
-        user_games.games = new_games;
-        let amount = game_metadata.stake;
-        aptos_account::transfer(@poker, from, amount);
-        game_metadata.pot = game_metadata.pot - amount;
-        vector::remove(&mut game_metadata.players, addr); */
-    //}
+    }
 
-    public entry fun place_bet(from: &signer, amount: u64) {
+    //public entry fun perform_action(from: &signer, game_id: u64, action: u64, amount: u64) acquires GameState {
         /* let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
         let addr = signer::address_of(from);
 
@@ -240,7 +299,7 @@ module poker::poker_manager {
         aptos_account::transfer(from, @poker, amount); 
 
         game_metadata.pot = game_metadata.pot + amount; */
-    }
+    //}
 
     /*
 
@@ -547,6 +606,56 @@ module poker::poker_manager {
 
         assert!(game_metadata.winner == signer::address_of(account1), 0);
         assert!(game_metadata.state == GAMESTATE_CLOSED, 0);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
+
+    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
+    fun test_leave_game(account1: &signer, admin: &signer, aptos_framework: &signer)
+    acquires GameState, UserGames {
+        // Setup
+        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
+        let aptos_framework_address = signer::address_of(aptos_framework);
+        account::create_account_for_test(aptos_framework_address);
+
+        let player1 = account::create_account_for_test(signer::address_of(account1));
+
+        coin::register<AptosCoin>(&player1);
+
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
+
+        init_module(admin);
+        let game_id = 1;
+
+        // Player joins the game
+        join_game(account1, game_id, 5000000);
+
+        // Fetch and Print GameState before leaving
+        let gamestate_before_leaving = borrow_global<GameState>(@poker);
+        let game_metadata_before_leaving = simple_map::borrow<u64, GameMetadata>(&gamestate_before_leaving.games, &game_id);
+
+        debug::print(&game_metadata_before_leaving.players);
+
+        // Ensure the player is in the game
+        assert!(vector::contains(&game_metadata_before_leaving.players, &signer::address_of(account1)), 0);
+
+        // Player leaves the game
+        leave_game(account1, game_id);
+
+        // Fetch and Print GameState after leaving
+        let gamestate_after_leaving = borrow_global<GameState>(@poker);
+        let game_metadata_after_leaving = simple_map::borrow<u64, GameMetadata>(&gamestate_after_leaving.games, &game_id);
+
+        debug::print(&game_metadata_after_leaving.players);
+
+        // Ensure the game has no players
+        assert!(game_metadata.state == GAMESTATE_OPEN, EGAME_ALREADY_STARTED);
+        assert!(vector::length(&game_metadata_after_leaving.players) == 0, 0);
+
+        // Ensure the player's UserGames struct no longer contains the game ID
+        let user1_games = borrow_global<UserGames>(signer::address_of(account1));
+        assert!(!vector::contains(&user1_games.games, &game_id), 0);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
