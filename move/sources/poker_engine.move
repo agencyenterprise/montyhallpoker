@@ -9,7 +9,7 @@ module poker::poker_engine {
     use aptos_std::debug;
     const cardHierarchy: vector<string::String> = vector[string::utf8(b"2"), string::utf8(b"3"), string::utf8(b"4"), string::utf8(b"5"), string::utf8(b"6"), string::utf8(b"7"), string::utf8(b"8"), string::utf8(b"9"), string::utf8(b"10"), string::utf8(b"jack"), string::utf8(b"queen"), string::utf8(b"king"), string::utf8(b"ace")];
 
-    fun initializeDeck(GameMetadata: &mut GameMetadata) {
+    fun initializeDeck(game: &mut GameMetadata) {
         let suits = vector[0, 1, 2, 3]; // 0 = hearts, 1 = diamonds, 2 = clubs, 3 = spades
         let values = vector[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
         
@@ -19,7 +19,7 @@ module poker::poker_engine {
             let j = 0;
             while (j < vector::length(&values)) {
                 let value = vector::borrow(&values, j);
-                vector::push_back(&mut GameMetadata.deck, Hand {
+                vector::push_back(&mut game.deck, Hand {
                     suit: suit,
                     value: value,
                     suit_string: string::new(),
@@ -45,23 +45,38 @@ module poker::poker_engine {
     fun dealHoleCards(GameMetadata: &GameMetadata) {
         let i = 0;
         while (i < vector::length(&GameMetadata.players)) {
-            let player = vector::borrow_mut(&GameMetadata.players, i);
-            vector::push_back(&mut player.hand, vector::pop_back(&mut GameMetadata.deck));
-            vector::push_back(&mut player.hand, vector::pop_back(&mut GameMetadata.deck));
-            i = i + 1;
+                let player = vector::borrow_mut(&GameMetadata.players, i);
+                vector::push_back(&mut player.hand, vector::pop_back(&mut GameMetadata.deck));
+                vector::push_back(&mut player.hand, vector::pop_back(&mut GameMetadata.deck));
+                i = i + 1;
         };
     }
 
-    fun evaluateHandDetails(cards: &vector<Hand>): (u8, u8, u8, u8, u8) {
+    fun dealCommunityCards(GameMetadata: &mut GameMetadata, number: u8) {
+        let deck_size = vector::length(&GameMetadata.deck);
+        if (number > deck_size) {
+            debug::print(b"Not enough cards in the deck to deal the requested number of community cards.");
+        };
+
+        let i: u64 = 0;
+        while (i < number) {
+            let index = (i + GameMetadata.seed) % deck_size;
+            let card = vector::remove(&mut GameMetadata.deck, index);
+            vector::push_back(&mut GameMetadata.communityCards, card);
+            i = i + 1;
+        }
+    }
+
+    fun evaluateHandDetails(cards: &vector<Hand>): (string::String, u8, u8) {
         let hand = Hand{suit: 0, value: 0, suit_string: b"", value_string: b""};
-        let straight: bool = false
-        let flush: bool = false
+        let straight: bool = false;
+        let flush: bool = false;
         let handType: string::String = string::utf8(b"High Card");
         let handRank: u8 = 1;
         let highestValue: u8 = 0;
-        let pairs: u8 = 0
-        let threeOfAKind: u8 = 0
-        let fourOfAKind: u8 = 0
+        let pairs: u8 = 0;
+        let threeOfAKind: u8 = 0;
+        let fourOfAKind: u8 = 0;
         let suits: SimpleMap<string::String, u8> = simple_map::new();
         let values = SimpleMap<u8, u8> = simple_map::new();
         let highestValue: u8 = 0;
@@ -97,29 +112,29 @@ module poker::poker_engine {
             };
             i = i + 1;
         };
-        flush = vector::any(suits.values(), |count| {
+        flush = vector::any(vector::values(&suits), |count| {
             count >= 5
         });
 
         let consecutive: u8 = 0;
-        for idx in 0..13 {
-            const hasConsecutive = simple_map::contains_key<u8>(&values, idx);
+        for (idx in 0..13) {
+            let hasConsecutive = simple_map::contains_key<u8>(&values, idx);
             if (!hasConsecutive) {
                 consecutive = 0;
             } else {
                 consecutive = *simple_map::borrow<u8>(&values, idx) + 1;
-            }
+            };
             if (consecutive >= 5) {
                straight = true;
             }
-        }
-        vector::for_each(values.values(), |value| {
+        };
+        vector::for_each(vector::values(&values), |value| {
             if (value == 2) {
-                pairs += 1;
+                pairs = pairs + 1;
             } else if (value == 3) {
-                threeOfAKind += 1;
+                threeOfAKind = threeOfAKind + 1;
             } else if (value == 4) {
-                fourOfAKind += 1;
+                fourOfAKind = fourOfAKind + 1;
             }
         });
         if (flush && straight) {
@@ -140,19 +155,19 @@ module poker::poker_engine {
         } else if (threeOfAKind > 0) {
             handType = string::utf8(b"Three of a Kind");
             handRank = 4;
-        } else if pairs == 2 {
+        } else if (pairs == 2) {
             handType = string::utf8(b"Two Pair");
             handRank = 3;
-        } else if pairs == 1 {
+        } else if (pairs == 1) {
             handType = string::utf8(b"One Pair");
             handRank = 2;
-        }
+        };
 
         (handType, handRank, highestValue)
     }
 
     fun evaluateHand(GameMetadata: &GameMetadata, player: &Player): (string::String, u8, u8) {
-        let newCards = vector::new<Hand>()
+        let newCards = vector::new<Hand>();
         vector::append(&newCards, &player.hand);
         vector::append(&newCards, &GameMetadata.communityCards);
         evaluateHandDetails(&newCards)
