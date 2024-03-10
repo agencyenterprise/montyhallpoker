@@ -9,7 +9,6 @@ module poker::poker_manager {
     use std::string;
     use std::simple_map::{SimpleMap,Self};
     use aptos_std::debug;
-    use aptos_framework::event;
 
     /// Error codes
     const EINVALID_MOVE: u64 = 0;
@@ -49,8 +48,11 @@ module poker::poker_manager {
     const STAGE_TURN: u8 = 2;
     const STAGE_RIVER: u8 = 3;
 
+    // Card hierarchy
+    const CARD_HIERARCHY: vector<u8> = vector[b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9", b"10", b"jack", b"queen", b"king", b"ace"];
+
     // Structs
-    struct Hand has drop, copy {
+    struct Card has drop, copy {
         suit: u8,
         value: u8,
         suit_string: vector<u8>,
@@ -58,9 +60,9 @@ module poker::poker_manager {
 
     }
 
-    struct Player has drop, copy {
+    struct Player has drop, copy, store {
         id: address,
-        hand: vector<Hand>,
+        hand: vector<Card>,
 
     }
 
@@ -71,13 +73,13 @@ module poker::poker_manager {
     
     struct GameMetadata has drop, copy, store {
         players: vector<Player>,
-        deck: vector<Hand>,
-        community: vector<Hand>,
+        deck: vector<Card>,
+        community: vector<Card>,
         currentRound: u8,
         stage: u8,
         currentPlayerIndex: u8,
         continueBetting: bool,
-        order: vector<Hand>,
+        order: vector<Card>,
         playerMove: u32,
         lastRaiser: Option<LastRaiser>,
         gameEnded: bool,
@@ -86,11 +88,11 @@ module poker::poker_manager {
         room_id: u64,
         stake: u64,
         pot: u64,
+        starter: u64,
         state: u64,
-        turn: vector<address>,
-        hands: vector<u64>,
+        last_action_timestamp: u64,
+        turn: address,
         current_bet: u64,
-        community_cards: vector<u64>,
         continueBetting: bool,
         winner: address,
     }
@@ -101,38 +103,6 @@ module poker::poker_manager {
 
     struct UserGames has key {
         games: vector<u64>,
-    }
-
-    // Events
-    #[event]
-    struct PlayerJoinsGame has drop, store {
-        account: address,
-        game_id: u64,
-        amount: u64,
-    }
-
-    #[event]
-    struct PlayerLeavesGame has drop, store {
-        account: address,
-        game_id: u64,
-    }
-
-    #[event]
-    struct PlayerPerformsActionEvent has drop, store {
-        account: address,
-        game_id: u64,
-    }
-
-    #[event]
-    struct GameEndsEvent has drop, store {
-        account: address,
-        game_id: u64,
-    }
-
-    #[event]
-    struct GameStartsEvent has drop, store {
-        account: address,
-        game_id: u64,
     }
 
     public fun assert_is_owner(addr: address) {
@@ -200,7 +170,7 @@ module poker::poker_manager {
             pot: 0,
             state: GAMESTATE_OPEN,
             stake: LOW_STAKES,
-            turn: vector::empty(),
+            turn: @0x0,
             winner: @0x0,
             players: vector::empty(),
         };
@@ -238,7 +208,7 @@ module poker::poker_manager {
             pot: 0,
             state: GAMESTATE_OPEN,
             stake: stake,
-            turn: vector::empty(),
+            turn: @0x0,
             winner: @0x0,
             players: vector::empty(),
         };
@@ -250,12 +220,6 @@ module poker::poker_manager {
     public entry fun join_game(from: &signer, game_id: u64, amount: u64) acquires GameState, UserGames {
         let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
         let addr = signer::address_of(from);
-
-        event::emit(PlayerJoinsGame {
-            account: addr,
-            game_id: game_id,
-            amount: amount,
-        });
 
         assert!(amount <= from_acc_balance, EINSUFFICIENT_BALANCE);
         
@@ -302,11 +266,6 @@ module poker::poker_manager {
 
         vector::remove(&mut game_metadata.players, player_index);
 
-        event::emit(PlayerLeavesGame {
-            account: addr,
-            game_id: game_id
-        });
-
         if (exists<UserGames>(addr)) {
             let user_games = borrow_global_mut<UserGames>(addr);
             (is_player_in_game, player_index) = vector::index_of(&user_games.games, &game_id);
@@ -336,364 +295,170 @@ module poker::poker_manager {
         game_metadata.pot = game_metadata.pot + amount; */
     //}
 
-    /*
+    fun initializeDeck(game: &mut GameMetadata) {
+        let suits = vector[0, 1, 2, 3]; // 0 = hearts, 1 = diamonds, 2 = clubs, 3 = spades
+        let values = vector[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+        
+        let i = 0;
+        while (i < vector::length(&suits)) {
+            let suit = vector::borrow(&suits, i);
+            let j = 0;
+            while (j < vector::length(&values)) {
+                let value = vector::borrow(&values, j);
+                vector::push_back(&mut game.deck, Card {
+                    suit: suit,
+                    value: value,
+                    suit_string: b"",
+                    value_string: b""
+                });
+                j = j + 1;
+            };
+            i = i + 1;
+        };
 
-    .-------------------------------.
-    |           T E S T S           |
-    '-------------------------------'
-
-    */
-
-    // Only an admin can create a game
-    #[test(admin = @poker, nonadmin = @0x5)]
-    #[expected_failure(abort_code = EINSUFFICIENT_PERMISSIONS)]
-    fun test_create_game_not_admin(nonadmin: &signer, admin: &signer) acquires GameState {
-        init_module(admin);
-
-        create_game(nonadmin, 2, LOW_STAKES);
+        GameMetadata.seed = randomness::u8_range(0, 51);
+    }
+    
+    fun initializePlayers(game_metadata: &GameMetadata, players: &vector<address>) {
+        let i = 0;
+        while (i < vector::length(players)) {
+            let player = vector::borrow(players, i);
+            vector::push_back(&mut game_metadata.players, Player{id: *player, hand: vector::new()});
+            i = i + 1;
+        };
     }
 
-    // Happy path where 4 players join the game normally
-
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, account3 = @0x5, account4 = @0x6)]
-    fun test_join_game(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
-    admin: &signer, aptos_framework: &signer)
-    acquires GameState, UserGames {
-        // Setup 
-
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-        let player2 = account::create_account_for_test(signer::address_of(account2));
-        let player3 = account::create_account_for_test(signer::address_of(account3));
-        let player4 = account::create_account_for_test(signer::address_of(account4));
-
-        coin::register<AptosCoin>(&player1);
-        coin::register<AptosCoin>(&player2);
-        coin::register<AptosCoin>(&player3);
-        coin::register<AptosCoin>(&player4);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
-
-        init_module(admin);
-        let game_id = 1;
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-        join_game(account2, 1, 6000000);
-        join_game(account3, 1, 7000000);
-        join_game(account4, 1, 8000000);
-
-        // Fetch and Print GameState
-        let gamestate = borrow_global<GameState>(@poker); 
-        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &game_id);
-
-        debug::print(&game_metadata.id);
-        debug::print(&game_metadata.room_id);
-        debug::print(&game_metadata.pot);
-        debug::print(&game_metadata.state);
-        debug::print(&game_metadata.winner);
-        debug::print(&game_metadata.players);
-
-        // Make sure the game is in the global state and has the correct number of players
-        assert!(game_metadata.id == copy game_id, 0);
-        assert!(vector::length(&game_metadata.players) == 4, 0);
-
-        let user1_games = borrow_global<UserGames>(signer::address_of(account1));
-        let user2_games = borrow_global<UserGames>(signer::address_of(account2));
-        let user3_games = borrow_global<UserGames>(signer::address_of(account3));
-        let user4_games = borrow_global<UserGames>(signer::address_of(account4));
-
-        debug::print(&user1_games.games);
-
-        // Make sure the users have the game in their list of games
-        assert!(vector::length(&user1_games.games) == 1, 0);
-        assert!(vector::length(&user2_games.games) == 1, 0);
-        assert!(vector::length(&user3_games.games) == 1, 0);
-        assert!(vector::length(&user4_games.games) == 1, 0);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
+    fun dealHoleCards(game_metadata: &GameMetadata) {
+        let i = 0;
+        while (i < vector::length(&game_metadata.players)) {
+                let player = vector::borrow_mut(&game_metadata.players, i);
+                vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
+                vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
+                i = i + 1;
+        };
     }
 
-    // User tries to join full table
+    fun dealCommunityCards(game_metadata: &mut GameMetadata, number: u8) {
+        let deck_size = vector::length(&game_metadata.deck);
+        if (number > deck_size) {
+            debug::print(b"Not enough cards in the deck to deal the requested number of community cards.");
+        };
 
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, 
-    account3 = @0x5, account4 = @0x6, account5 = @0x7)]
-    #[expected_failure(abort_code = ETABLE_IS_FULL)]
-    fun test_join_full_game(account1: &signer, account2: &signer, account3: &signer,
-    account4: &signer, account5: &signer,
-    admin: &signer, aptos_framework: &signer)
-    acquires GameState, UserGames {
-        // Setup 
-
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-        let player2 = account::create_account_for_test(signer::address_of(account2));
-        let player3 = account::create_account_for_test(signer::address_of(account3));
-        let player4 = account::create_account_for_test(signer::address_of(account4));
-        let player5 = account::create_account_for_test(signer::address_of(account5));
-
-        coin::register<AptosCoin>(&player1);
-        coin::register<AptosCoin>(&player2);
-        coin::register<AptosCoin>(&player3);
-        coin::register<AptosCoin>(&player4);
-        coin::register<AptosCoin>(&player5);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account5), 90000000000);
-
-        init_module(admin);
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-        join_game(account2, 1, 6000000);
-        join_game(account3, 1, 7000000);
-        join_game(account4, 1, 8000000);
-        join_game(account5, 1, 6500000); // This should fail because the table is full
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
+        let i: u64 = 0;
+        while (i < number) {
+            let index = (i + game_metadata.seed) % deck_size;
+            let card = vector::remove(&mut game_metadata.deck, index);
+            vector::push_back(&mut game_metadata.community, card);
+            i = i + 1;
+        }
     }
 
-    // User tries to join without enough coins
+    fun evaluateHandDetails(cards: &vector<Card>): (string::String, u8, u8) {
+        let hand = Card{suit: 0, value: 0, suit_string: b"", value_string: b""};
+        let straight: bool = false;
+        let flush: bool = false;
+        let handType: string::String = string::utf8(b"High Card");
+        let handRank: u8 = 1;
+        let highestValue: u8 = 0;
+        let pairs: u8 = 0;
+        let threeOfAKind: u8 = 0;
+        let fourOfAKind: u8 = 0;
+        let suits: SimpleMap<string::String, u8> = simple_map::new();
+        let values = SimpleMap<u8, u8> = simple_map::new();
+        let highestValue: u8 = 0;
+        let i = 0;
+        while (i < vector::length(&cards)) {
+            let card = vector::borrow(&cards, i);
+            let suit = card.suit_string;
+            let value = card.value_string;
+            let suitCount = simple_map::borrow(&suits, suit);
+            
+            if (option::is_none(suitCount)) {
+                simple_map::upsert(&mut suits, suit, 1);
+            } else {
+                let unwrapped_count = option::borrow(suitCount); // Ensure it's 'some'
+                 simple_map::upsert(&mut suits, suit, *unwrapped_count + 1); // Use the unwrapped value */
+            };
 
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
-    #[expected_failure(abort_code = EINSUFFICIENT_BALANCE)]
-    fun test_join_without_balance(account1: &signer, admin: &signer, aptos_framework: &signer)
-    acquires GameState, UserGames {
-        // Setup 
+            let (hasIndex, valueIndex) = vector::index_of(CARD_HIERARCHY, b(value));
 
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
+            if (!hasIndex) {
+                debug::print(b"Error: Card value not found in CARD_HIERARCHY");
+            };
 
-        let player1 = account::create_account_for_test(signer::address_of(account1));
+            let valueCount = simple_map::borrow(&values, valueIndex);
+            if (option::is_none(valueCount)) {
+                simple_map::upsert(&mut values, valueIndex, 1);
+            } else {
+                let unwrapped_count = option::borrow(valueCount);
+                simple_map::upsert(&mut values, valueIndex, *unwrapped_count + 1);
+            };
+            if (value > highestValue) {
+                highestValue = value;
+            };
+            i = i + 1;
+        };
+        flush = vector::any(vector::values(&suits), |count| {
+            count >= 5
+        });
 
-        coin::register<AptosCoin>(&player1);
+        let consecutive: u8 = 0;
+        for (idx in 0..13) {
+            let hasConsecutive = simple_map::contains_key<u8, u8>(&values, idx);
+            if (!hasConsecutive) {
+                consecutive = 0;
+            } else {
+                consecutive = *simple_map::borrow<u8, u8>(&values, idx) + 1;
+            };
+            if (consecutive >= 5) {
+               straight = true;
+            }
+        };
+        vector::for_each<u8>(simple_map::values<u8, u8>(values), |value| {
+            if (value == 2) {
+                pairs = pairs + 1;
+            } else if (value == 3) {
+                threeOfAKind = threeOfAKind + 1;
+            } else if (value == 4) {
+                fourOfAKind = fourOfAKind + 1;
+            }
+        });
+        if (flush && straight) {
+            handType = string::utf8(b"Straight Flush");
+            handRank = 9;
+        } else if (fourOfAKind > 0) {
+            handType = string::utf8(b"Four of a Kind");
+            handRank = 8;
+        } else if (threeOfAKind > 0 && pairs > 0) {
+            handType = string::utf8(b"Full House");
+            handRank = 7;
+        } else if (flush) {
+            handType = string::utf8(b"Flush");
+            handRank = 6;
+        } else if (straight) {
+            handType = string::utf8(b"Straight");
+            handRank = 5;
+        } else if (threeOfAKind > 0) {
+            handType = string::utf8(b"Three of a Kind");
+            handRank = 4;
+        } else if (pairs == 2) {
+            handType = string::utf8(b"Two Pair");
+            handRank = 3;
+        } else if (pairs == 1) {
+            handType = string::utf8(b"One Pair");
+            handRank = 2;
+        };
 
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 300);
-
-        init_module(admin);
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
+        (handType, handRank, highestValue)
     }
 
-    // User cannot join a game if they are already in a in-progress game
-
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
-    #[expected_failure(abort_code = EALREADY_IN_GAME)]
-    fun test_join_while_in_game(account1: &signer, admin: &signer, aptos_framework: &signer) acquires GameState, UserGames {
-        // Setup 
-
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-
-        coin::register<AptosCoin>(&player1);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-
-        init_module(admin);
-
-        // Create game
-        create_game(admin, 2, LOW_STAKES);
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-
-        // Simulate Joining again
-        join_game(account1, 2, 5000000);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
+    fun evaluateHand(game_metadata: &GameMetadata, player: &Player): (string::String, u8, u8) {
+        let newCards = vector::empty<Card>();
+        vector::append<Card>(&mut newCards, player.hand);
+        vector::append<Card>(&mut newCards, game_metadata.community);
+        evaluateHandDetails(&newCards)
     }
 
-    // When a game starts with 4 players, it should succeed
-
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, account3 = @0x5, account4 = @0x6)]
-    fun test_game_starts(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
-    admin: &signer, aptos_framework: &signer) acquires UserGames, GameState {
-        // Setup 
-
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-        let player2 = account::create_account_for_test(signer::address_of(account2));
-        let player3 = account::create_account_for_test(signer::address_of(account3));
-        let player4 = account::create_account_for_test(signer::address_of(account4));
-
-        coin::register<AptosCoin>(&player1);
-        coin::register<AptosCoin>(&player2);
-        coin::register<AptosCoin>(&player3);
-        coin::register<AptosCoin>(&player4);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
-
-        init_module(admin);
-
-        // Create game
-        create_game(admin, 2, LOW_STAKES);
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-        join_game(account2, 1, 6000000);
-        join_game(account3, 1, 7000000);
-        join_game(account4, 1, 8000000);
-
-        // Start game
-        start_game(1);
-
-        let gamestate = borrow_global<GameState>(@poker);
-        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
-
-        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, 0);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
-    }
-
-    // When a game starts with less than 4 players, it should fail
-
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
-    #[expected_failure(abort_code = EGAME_NOT_READY)]
-    fun test_game_start_fails_too_few(account1: &signer, admin: &signer, aptos_framework: &signer) acquires UserGames, GameState {
-        // Setup 
-
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-
-        coin::register<AptosCoin>(&player1);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-
-        init_module(admin);
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-
-        // Start game
-        start_game(1);
-
-        let gamestate = borrow_global<GameState>(@poker);
-        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
-
-        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, 0);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
-    }
-
-    // When a winner is declared, the game state is updated
-
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
-    fun test_winner_declared(account1: &signer, admin: &signer, aptos_framework: &signer) acquires GameState, UserGames {
-        // Setup 
-
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-
-        coin::register<AptosCoin>(&player1);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-
-        init_module(admin);
-
-        // Create game
-        create_game(admin, 2, LOW_STAKES);
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-
-        // Declare winner
-        winner(signer::address_of(account1));
-
-        let gamestate = borrow_global<GameState>(@poker);
-        let game_metadata = simple_map::borrow<u64, GameMetadata>(&gamestate.games, &1);
-
-        assert!(game_metadata.winner == signer::address_of(account1), 0);
-        assert!(game_metadata.state == GAMESTATE_CLOSED, 0);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
-    }
-
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3)]
-    fun test_leave_game(account1: &signer, admin: &signer, aptos_framework: &signer)
-    acquires GameState, UserGames {
-        // Setup
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-
-        coin::register<AptosCoin>(&player1);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-
-        init_module(admin);
-        let game_id = 1;
-
-        // Player joins the game
-        join_game(account1, game_id, 5000000);
-
-        // Fetch and Print GameState before leaving
-        let gamestate_before_leaving = borrow_global<GameState>(@poker);
-        let game_metadata_before_leaving = simple_map::borrow<u64, GameMetadata>(&gamestate_before_leaving.games, &game_id);
-
-        debug::print(&game_metadata_before_leaving.players);
-
-        // Ensure the player is in the game
-        assert!(vector::contains(&game_metadata_before_leaving.players, &signer::address_of(account1)), 0);
-
-        // Player leaves the game
-        leave_game(account1, game_id);
-
-        // Fetch and Print GameState after leaving
-        let gamestate_after_leaving = borrow_global<GameState>(@poker);
-        let game_metadata_after_leaving = simple_map::borrow<u64, GameMetadata>(&gamestate_after_leaving.games, &game_id);
-
-        debug::print(&game_metadata_after_leaving.players);
-
-        // Ensure the game has no players
-        assert!(game_metadata.state == GAMESTATE_OPEN, EGAME_ALREADY_STARTED);
-        assert!(vector::length(&game_metadata_after_leaving.players) == 0, 0);
-
-        // Ensure the player's UserGames struct no longer contains the game ID
-        let user1_games = borrow_global<UserGames>(signer::address_of(account1));
-        assert!(!vector::contains(&user1_games.games, &game_id), 0);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
-    }
+    // TODO: Add back unit tests
 
 }

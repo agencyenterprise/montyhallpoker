@@ -2,7 +2,7 @@
   "players": [
     {
       "id": 1,
-      "chips": 900,
+      "chips": 895,
       "hand": [
         {
           "suit": 32,
@@ -13,9 +13,9 @@
           "value": 46
         }
       ],
-      "currentBet": 0,
+      "currentBet": 5,
       "status": "active",
-      "move": 0
+      "move": 1
     },
     {
       "id": 2,
@@ -233,26 +233,27 @@
     {
       "suit": 21,
       "value": 21
-    },
+    }
+  ],
+  "pot": 420,
+  "currentBet": 5,
+  "communityCards": [
     {
-      "suit": 42,
-      "value": 42
+      "suit": 26,
+      "value": 26
     },
     {
       "suit": 12,
       "value": 12
     },
     {
-      "suit": 26,
-      "value": 26
+      "suit": 42,
+      "value": 42
     }
   ],
-  "pot": 415,
-  "currentBet": 5,
-  "communityCards": [],
-  "currentRound": 0,
-  "stage": "pre-flop",
-  "currentPlayerIndex": 0,
+  "currentRound": 1,
+  "stage": "flop",
+  "currentPlayerIndex": 1,
   "continueBetting": true,
   "order": [
     {
@@ -675,10 +676,7 @@
     }
   ],
   "move": 0,
-  "lastRaiser": {
-    "playerIndex": 1,
-    "move": 0
-  },
+  "lastRaiser": null,
   "gameEnded": false,
   "dealerPosition": 0
 }

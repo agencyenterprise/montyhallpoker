@@ -17,3 +17,11 @@ aptos move publish \
 	--assume-yes \
   --profile local \
   --named-addresses poker_manager=local
+
+
+
+aptos move view \
+    --profile local \
+    --function-id 0x2c48a1afc19e2fc88c85d28f7449c9fa6ff22ab7165553fcf50ca32d007366fe::poker_manager::get_game_by_id \
+    --args u64:1
+

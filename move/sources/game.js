@@ -107,7 +107,7 @@ function dealHoleCards(gameState) {
     return gameState;
 }
 
-
+const seed = Math.floor(Math.random() * 52);
 function dealCommunityCards(number) {
     // Ensure the function doesn't attempt to deal more cards than what remains in the deck
     if (number > gameState.deck.length) {
