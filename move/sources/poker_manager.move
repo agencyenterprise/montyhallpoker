@@ -7,6 +7,7 @@ module poker::poker_manager {
     use 0x1::aptos_coin;
     use std::account;
     use std::string;
+    use std::option;
     use std::simple_map::{SimpleMap,Self};
     use aptos_std::debug;
 
@@ -23,6 +24,7 @@ module poker::poker_manager {
     const EGAME_NOT_READY: u64 = 9;
     const EINSUFFICIENT_BALANCE_FOR_STAKE: u64 = 10;
     const ENOT_IN_GAME: u64 = 11;
+    const EINVALID_CARD: u64 = 12;
 
     // Game states
     const GAMESTATE_OPEN: u64 = 0;
@@ -47,9 +49,10 @@ module poker::poker_manager {
     const STAGE_FLOP: u8 = 1;
     const STAGE_TURN: u8 = 2;
     const STAGE_RIVER: u8 = 3;
+    const STAGE_SHOWDOWN: u8 = 4;
 
     // Card hierarchy
-    const CARD_HIERARCHY: vector<u8> = vector[b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9", b"10", b"jack", b"queen", b"king", b"ace"];
+    const CARD_HIERARCHY: vector<vector<u8>> = vector[b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9", b"10", b"jack", b"queen", b"king", b"ace"];
 
     // Structs
     struct Card has drop, copy {
@@ -57,13 +60,11 @@ module poker::poker_manager {
         value: u8,
         suit_string: vector<u8>,
         value_string: vector<u8>,
-
     }
 
     struct Player has drop, copy, store {
         id: address,
         hand: vector<Card>,
-
     }
 
     struct LastRaiser has drop, copy {
@@ -298,7 +299,7 @@ module poker::poker_manager {
     fun initializeDeck(game: &mut GameMetadata) {
         let suits = vector[0, 1, 2, 3]; // 0 = hearts, 1 = diamonds, 2 = clubs, 3 = spades
         let values = vector[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
-        
+
         let i = 0;
         while (i < vector::length(&suits)) {
             let suit = vector::borrow(&suits, i);
@@ -353,68 +354,64 @@ module poker::poker_manager {
         }
     }
 
-    fun evaluateHandDetails(cards: &vector<Card>): (string::String, u8, u8) {
+    fun evaluateHandDetails(cards: &vector<Card>): (vector<u8>, u8, u8) {
         let hand = Card{suit: 0, value: 0, suit_string: b"", value_string: b""};
         let straight: bool = false;
         let flush: bool = false;
-        let handType: string::String = string::utf8(b"High Card");
+        let handType: vector<u8> = b"High Card";
         let handRank: u8 = 1;
         let highestValue: u8 = 0;
         let pairs: u8 = 0;
         let threeOfAKind: u8 = 0;
         let fourOfAKind: u8 = 0;
-        let suits: SimpleMap<string::String, u8> = simple_map::new();
-        let values = SimpleMap<u8, u8> = simple_map::new();
-        let highestValue: u8 = 0;
+        let suits = simple_map::new<vector<u8>, u8>();
+        let values = simple_map::new<u8, u8>();
         let i = 0;
-        while (i < vector::length(&cards)) {
-            let card = vector::borrow(&cards, i);
+        while (i < vector::length(cards)) {
+            let card = vector::borrow(cards, i);
             let suit = card.suit_string;
-            let value = card.value_string;
-            let suitCount = simple_map::borrow(&suits, suit);
-            
-            if (option::is_none(suitCount)) {
+            let value: vector<u8> = card.value_string;
+            let suitCount = simple_map::borrow(&suits, &suit);
+
+            if (!simple_map::contains_key<vector<u8>, u8>(&suits, &suit)) {
                 simple_map::upsert(&mut suits, suit, 1);
             } else {
-                let unwrapped_count = option::borrow(suitCount); // Ensure it's 'some'
-                 simple_map::upsert(&mut suits, suit, *unwrapped_count + 1); // Use the unwrapped value */
+                let suitCount = simple_map::borrow<vector<u8>, u8>(&suits, &suit);
+                simple_map::upsert(&mut suits, suit, *suitCount + 1);
             };
 
-            let (hasIndex, valueIndex) = vector::index_of(CARD_HIERARCHY, b(value));
+            let (hasIndex, valueIndex) = vector::index_of<vector<u8>>(&CARD_HIERARCHY, &value);
 
-            if (!hasIndex) {
-                debug::print(b"Error: Card value not found in CARD_HIERARCHY");
-            };
+            assert!(hasIndex, EINVALID_CARD);
 
-            let valueCount = simple_map::borrow(&values, valueIndex);
-            if (option::is_none(valueCount)) {
-                simple_map::upsert(&mut values, valueIndex, 1);
+            if (!simple_map::contains_key<u8, u8>(&values, &(valueIndex as u8))) {
+                simple_map::upsert(&mut values, (valueIndex as u8), 1);
             } else {
-                let unwrapped_count = option::borrow(valueCount);
-                simple_map::upsert(&mut values, valueIndex, *unwrapped_count + 1);
+                let valueCount = simple_map::borrow<u8, u8>(&values, &(valueIndex as u8));
+                simple_map::upsert(&mut values, (valueIndex as u8), *valueCount + 1);
             };
-            if (value > highestValue) {
-                highestValue = value;
+            if ((valueIndex as u8) > highestValue) {
+                highestValue = (valueIndex as u8);
             };
             i = i + 1;
         };
-        flush = vector::any(vector::values(&suits), |count| {
-            count >= 5
+        flush = vector::any<u8>(&simple_map::values<vector<u8>, u8>(&suits), |count| {
+            *count >= 5 
         });
 
         let consecutive: u8 = 0;
         for (idx in 0..13) {
-            let hasConsecutive = simple_map::contains_key<u8, u8>(&values, idx);
+            let hasConsecutive = simple_map::contains_key<u8, u8>(&values, &idx);
             if (!hasConsecutive) {
                 consecutive = 0;
             } else {
-                consecutive = *simple_map::borrow<u8, u8>(&values, idx) + 1;
+                consecutive = *simple_map::borrow<u8, u8>(&values, &idx) + 1;
             };
             if (consecutive >= 5) {
                straight = true;
             }
         };
-        vector::for_each<u8>(simple_map::values<u8, u8>(values), |value| {
+        vector::for_each<u8>(simple_map::values<u8, u8>(&values), |value| {
             if (value == 2) {
                 pairs = pairs + 1;
             } else if (value == 3) {
@@ -424,35 +421,35 @@ module poker::poker_manager {
             }
         });
         if (flush && straight) {
-            handType = string::utf8(b"Straight Flush");
+            handType = b"Straight Flush";
             handRank = 9;
         } else if (fourOfAKind > 0) {
-            handType = string::utf8(b"Four of a Kind");
+            handType = b"Four of a Kind";
             handRank = 8;
         } else if (threeOfAKind > 0 && pairs > 0) {
-            handType = string::utf8(b"Full House");
+            handType = b"Full House";
             handRank = 7;
         } else if (flush) {
-            handType = string::utf8(b"Flush");
+            handType = b"Flush";
             handRank = 6;
         } else if (straight) {
-            handType = string::utf8(b"Straight");
+            handType = b"Straight";
             handRank = 5;
         } else if (threeOfAKind > 0) {
-            handType = string::utf8(b"Three of a Kind");
+            handType = b"Three of a Kind";
             handRank = 4;
         } else if (pairs == 2) {
-            handType = string::utf8(b"Two Pair");
+            handType = b"Two Pair";
             handRank = 3;
         } else if (pairs == 1) {
-            handType = string::utf8(b"One Pair");
+            handType = b"One Pair";
             handRank = 2;
         };
 
         (handType, handRank, highestValue)
     }
 
-    fun evaluateHand(game_metadata: &GameMetadata, player: &Player): (string::String, u8, u8) {
+    fun evaluateHand(game_metadata: &GameMetadata, player: &Player): (vector<u8>, u8, u8) {
         let newCards = vector::empty<Card>();
         vector::append<Card>(&mut newCards, player.hand);
         vector::append<Card>(&mut newCards, game_metadata.community);
