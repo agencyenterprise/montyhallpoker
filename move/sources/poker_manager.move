@@ -8,8 +8,9 @@ module poker::poker_manager {
     use std::account;
     use std::string;
     use std::option;
+    use std::randomness;
     use std::simple_map::{SimpleMap,Self};
-    use aptos_std::debug;
+    use std::debug;
 
     /// Error codes
     const EINVALID_MOVE: u64 = 0;
@@ -32,7 +33,7 @@ module poker::poker_manager {
     const GAMESTATE_CLOSED: u64 = 2;
 
     // Stakes
-    const LOW_STAKES: u64 = 5000000; // More or less 0.05 APT (1 APT = $10)
+    const LOW_STAKES: u64 = 5000000; // More or less 0.05 APT
     const MEDIUM_STAKES: u64 = 30000000; // More or less 0.3 APT
     const HIGH_STAKES: u64 = 100000000; // More or less 1 APT
 
@@ -51,11 +52,16 @@ module poker::poker_manager {
     const STAGE_RIVER: u8 = 3;
     const STAGE_SHOWDOWN: u8 = 4;
 
+    // Status
+    const STATUS_ACTIVE: u8 = 0;
+    const STATUS_FOLDED: u8 = 1;
+    const STATUS_ALL_IN: u8 = 2;
+
     // Card hierarchy
     const CARD_HIERARCHY: vector<vector<u8>> = vector[b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9", b"10", b"jack", b"queen", b"king", b"ace"];
 
     // Structs
-    struct Card has drop, copy {
+    struct Card has drop, copy, store {
         suit: u8,
         value: u8,
         suit_string: vector<u8>,
@@ -65,9 +71,10 @@ module poker::poker_manager {
     struct Player has drop, copy, store {
         id: address,
         hand: vector<Card>,
+        status: u8
     }
 
-    struct LastRaiser has drop, copy {
+    struct LastRaiser has drop, copy, store {
         playerIndex: address,
         playerMove: u32,
     }
@@ -82,19 +89,18 @@ module poker::poker_manager {
         continueBetting: bool,
         order: vector<Card>,
         playerMove: u32,
-        lastRaiser: Option<LastRaiser>,
+        lastRaiser: option::Option<LastRaiser>,
         gameEnded: bool,
-        seed: u64,
+        seed: u8,
         id: u64,
         room_id: u64,
         stake: u64,
         pot: u64,
-        starter: u64,
+        starter: u8,
         state: u64,
         last_action_timestamp: u64,
         turn: address,
         current_bet: u64,
-        continueBetting: bool,
         winner: address,
     }
 
@@ -154,6 +160,60 @@ module poker::poker_manager {
         }
     }
 
+    fun find_player_by_address(players: &vector<Player>, addr: &address): (bool, u64) {
+        let len = vector::length(players);
+        let i = 0;
+        while (i < len) {
+            let player = vector::borrow(players, i);
+            if (&player.id == addr) {
+                return (true, i)
+            };
+            i = i + 1;
+        };
+        (false, 0)
+    }
+
+    // Returns stake for room_id (low first 4 rooms, medium next 4 rooms, high next 4 rooms)
+    fun get_stake(room_id: u64): u64 {
+        if (room_id <= 4) {
+            LOW_STAKES;
+        } else if (room_id <= 8) {
+            MEDIUM_STAKES;
+        };
+        HIGH_STAKES
+    }
+    
+
+    // Creates empty game metadata
+    fun create_game_metadata(id: u64, room_id: u64): GameMetadata {
+        let random_player = randomness::u8_range(0, 4);
+
+        GameMetadata {
+            id: id,
+            room_id: room_id,
+            pot: 0,
+            state: GAMESTATE_OPEN,
+            stake: get_stake(room_id),
+            turn: @0x0,
+            winner: @0x0,
+            players: vector::empty(),
+            deck: vector::empty(),
+            community: vector::empty(),
+            currentRound: 0,
+            stage: 0,
+            currentPlayerIndex: 0,
+            continueBetting: true,
+            order: vector::empty(),
+            playerMove: 0,
+            lastRaiser: option::none<LastRaiser>(),
+            gameEnded: false,
+            seed: 0,
+            starter: random_player,
+            last_action_timestamp: 0,
+            current_bet: 0,
+        }
+    }
+
     // Initialize the game state and add the game to the global state
     fun init_module(acc: &signer) {
         let addr = signer::address_of(acc);
@@ -165,21 +225,21 @@ module poker::poker_manager {
             games: simple_map::new(),
         };
 
-        let game_metadata = GameMetadata {
-            id: 1,
-            room_id: 1,
-            pot: 0,
-            state: GAMESTATE_OPEN,
-            stake: LOW_STAKES,
-            turn: @0x0,
-            winner: @0x0,
-            players: vector::empty(),
-        };
+        let game_metadata = create_game_metadata(1, 1);
 
         simple_map::add(&mut gamestate.games, game_metadata.id, game_metadata);
 
         move_to(acc, gamestate);
     }
+
+    // View functions
+    #[view]
+    public fun get_game_by_id(game_id: u64): GameMetadata {
+        assert_is_initialized();
+        get_game_metadata_by_id(game_id)
+    }
+
+    // Action functions
 
     public fun start_game(game_id: u64) acquires GameState {
         let gamestate = borrow_global_mut<GameState>(@poker);
@@ -195,7 +255,7 @@ module poker::poker_manager {
         game_metadata.state = GAMESTATE_CLOSED;
     }
 
-    public entry fun create_game(acc: &signer, room_id: u64, stake: u64) acquires GameState {
+    public entry fun create_game(acc: &signer, room_id: u64) acquires GameState {
         let addr = signer::address_of(acc);
         assert_is_initialized();
         assert_is_owner(addr);
@@ -203,16 +263,7 @@ module poker::poker_manager {
         let gamestate = borrow_global_mut<GameState>(@poker);
 
         // Add a new game to the global state
-        let game_metadata = GameMetadata {
-            id: vector::length<u64>(&simple_map::keys(&gamestate.games)) + 1, // Type parameter after function name
-            room_id: room_id,
-            pot: 0,
-            state: GAMESTATE_OPEN,
-            stake: stake,
-            turn: @0x0,
-            winner: @0x0,
-            players: vector::empty(),
-        };
+        let game_metadata = create_game_metadata(vector::length<u64>(&simple_map::keys(&gamestate.games)) + 1, room_id);
 
         simple_map::add(&mut gamestate.games, game_metadata.id, game_metadata);
     }
@@ -240,7 +291,7 @@ module poker::poker_manager {
         
         aptos_account::transfer(from, @poker, amount); 
 
-        vector::push_back(&mut game_metadata.players, addr);
+        vector::push_back(&mut game_metadata.players, Player{id: addr, hand: vector::empty()});
         game_metadata.pot = game_metadata.pot + amount;
 
         if (!exists<UserGames>(addr)) {
@@ -262,7 +313,7 @@ module poker::poker_manager {
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
-        let (is_player_in_game, player_index) = vector::index_of(&game_metadata.players, &addr);
+        let (is_player_in_game, player_index) = find_player_by_address(&game_metadata.players, &addr);
         assert!(is_player_in_game, ENOT_IN_GAME);
 
         vector::remove(&mut game_metadata.players, player_index);
@@ -277,28 +328,55 @@ module poker::poker_manager {
         }
     }
 
-    //public entry fun perform_action(from: &signer, game_id: u64, action: u64, amount: u64) acquires GameState {
-        /* let from_acc_balance:u64 = coin::balance<AptosCoin>(signer::address_of(from));
+    public entry fun perform_action(from: &signer, game_id: u64, action: u64, amount: u64) acquires GameState {
         let addr = signer::address_of(from);
-
-        assert!(amount <= from_acc_balance, EINSUFFICIENT_BALANCE);
+        assert_is_initialized();
 
         let gamestate = borrow_global_mut<GameState>(@poker);
-
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
-        assert!(game_metadata.state == GAMESTATE_OPEN, EINVALID_MOVE);
-        
-        aptos_account::transfer(from, @poker, amount); 
+        let (is_player_in_game, player_index) = find_player_by_address(&game_metadata.players, &addr);
+        assert!(is_player_in_game, ENOT_IN_GAME);
 
-        game_metadata.pot = game_metadata.pot + amount; */
-    //}
+        let player = vector::borrow_mut(&mut game_metadata.players, player_index);
+
+        assert!(game_metadata.turn == addr, EINSUFFICIENT_PERMISSIONS);
+
+        if (action == FOLD) {
+            player.status = STATUS_FOLDED;
+        } else if (action == CHECK) {
+            // Do nothing
+        } else if (action == CALL) {
+            let diff = game_metadata.current_bet - player.current_bet;
+            assert!(diff <= amount, EINVALID_MOVE);
+            player.current_bet = player.current_bet + diff;
+            game_metadata.pot = game_metadata.pot + diff;
+        } else if (action == RAISE) {
+            assert!(amount > game_metadata.current_bet, EINVALID_MOVE);
+            player.current_bet = player.current_bet + amount;
+            game_metadata.pot = game_metadata.pot + amount;
+            game_metadata.current_bet = amount;
+        } else if (action == ALL_IN) {
+            player.current_bet = player.current_bet + amount;
+            game_metadata.pot = game_metadata.pot + amount;
+            game_metadata.current_bet = amount;
+            player.status = STATUS_ALL_IN;
+        } else if (action == BET) {
+            assert!(amount >= game_metadata.current_bet, EINVALID_MOVE);
+            player.current_bet = player.current_bet + amount;
+            game_metadata.pot = game_metadata.pot + amount;
+            game_metadata.current_bet = amount;
+        }
+
+        game_metadata.last_action_timestamp = chain::timestamp();
+        game_metadata.turn = player_index + 1;
+    }
 
     fun initializeDeck(game: &mut GameMetadata) {
-        let suits = vector[0, 1, 2, 3]; // 0 = hearts, 1 = diamonds, 2 = clubs, 3 = spades
-        let values = vector[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+        let suits: vector<u8> = vector[0, 1, 2, 3]; // 0 = hearts, 1 = diamonds, 2 = clubs, 3 = spades
+        let values: vector<u8> = vector[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 
         let i = 0;
         while (i < vector::length(&suits)) {
@@ -307,8 +385,8 @@ module poker::poker_manager {
             while (j < vector::length(&values)) {
                 let value = vector::borrow(&values, j);
                 vector::push_back(&mut game.deck, Card {
-                    suit: suit,
-                    value: value,
+                    suit: *suit,
+                    value: *value,
                     suit_string: b"",
                     value_string: b""
                 });
@@ -317,48 +395,49 @@ module poker::poker_manager {
             i = i + 1;
         };
 
-        GameMetadata.seed = randomness::u8_range(0, 51);
+        game.seed = randomness::u8_range(0, 51);
     }
     
-    fun initializePlayers(game_metadata: &GameMetadata, players: &vector<address>) {
+    fun initializePlayers(game_metadata: &mut GameMetadata, players: &vector<address>) {
         let i = 0;
-        while (i < vector::length(players)) {
+        let players_len = vector::length(players);
+        while (i < players_len) {
             let player = vector::borrow(players, i);
-            vector::push_back(&mut game_metadata.players, Player{id: *player, hand: vector::new()});
+            vector::push_back(&mut game_metadata.players, Player{id: *player, hand: vector::empty()});
             i = i + 1;
         };
     }
 
-    fun dealHoleCards(game_metadata: &GameMetadata) {
-        let i = 0;
-        while (i < vector::length(&game_metadata.players)) {
-                let player = vector::borrow_mut(&game_metadata.players, i);
-                vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
-                vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
-                i = i + 1;
-        };
-    }
+
+    fun dealHoleCards(game_metadata: &mut GameMetadata) {
+    let i = 0;
+    let players_len = vector::length(&game_metadata.players);
+    while (i < players_len) {
+        let player = vector::borrow_mut(&mut game_metadata.players, i);
+        vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
+        vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
+        i = i + 1;
+    };
+}
+
 
     fun dealCommunityCards(game_metadata: &mut GameMetadata, number: u8) {
-        let deck_size = vector::length(&game_metadata.deck);
-        if (number > deck_size) {
-            debug::print(b"Not enough cards in the deck to deal the requested number of community cards.");
-        };
+        let deck_size = (vector::length(&game_metadata.deck) as u8);
+        assert!(deck_size >= number, EINVALID_MOVE);
 
-        let i: u64 = 0;
+        let i: u8 = 0;
         while (i < number) {
-            let index = (i + game_metadata.seed) % deck_size;
-            let card = vector::remove(&mut game_metadata.deck, index);
+            let index = (i + game_metadata.seed) % (deck_size as u8);
+            let card = vector::remove(&mut game_metadata.deck, (index as u64));
             vector::push_back(&mut game_metadata.community, card);
             i = i + 1;
         }
     }
 
     fun evaluateHandDetails(cards: &vector<Card>): (vector<u8>, u8, u8) {
-        let hand = Card{suit: 0, value: 0, suit_string: b"", value_string: b""};
         let straight: bool = false;
-        let flush: bool = false;
         let handType: vector<u8> = b"High Card";
+        let _flush: bool = false;
         let handRank: u8 = 1;
         let highestValue: u8 = 0;
         let pairs: u8 = 0;
@@ -371,13 +450,12 @@ module poker::poker_manager {
             let card = vector::borrow(cards, i);
             let suit = card.suit_string;
             let value: vector<u8> = card.value_string;
-            let suitCount = simple_map::borrow(&suits, &suit);
 
             if (!simple_map::contains_key<vector<u8>, u8>(&suits, &suit)) {
-                simple_map::upsert(&mut suits, suit, 1);
+                simple_map::upsert(&mut suits, copy suit, 1);
             } else {
                 let suitCount = simple_map::borrow<vector<u8>, u8>(&suits, &suit);
-                simple_map::upsert(&mut suits, suit, *suitCount + 1);
+                simple_map::upsert(&mut suits, copy suit, *suitCount + 1);
             };
 
             let (hasIndex, valueIndex) = vector::index_of<vector<u8>>(&CARD_HIERARCHY, &value);
@@ -395,19 +473,25 @@ module poker::poker_manager {
             };
             i = i + 1;
         };
-        flush = vector::any<u8>(&simple_map::values<vector<u8>, u8>(&suits), |count| {
+
+
+        // Print suits and values map
+        debug::print(&suits);
+        debug::print(&values);
+
+        _flush = vector::any<u8>(&simple_map::values<vector<u8>, u8>(&suits), |count| {
             *count >= 5 
         });
 
-        let consecutive: u8 = 0;
+        let _consecutive: u8 = 0;
         for (idx in 0..13) {
             let hasConsecutive = simple_map::contains_key<u8, u8>(&values, &idx);
             if (!hasConsecutive) {
-                consecutive = 0;
+                _consecutive = 0;
             } else {
-                consecutive = *simple_map::borrow<u8, u8>(&values, &idx) + 1;
+                _consecutive = *simple_map::borrow<u8, u8>(&values, &idx) + 1;
             };
-            if (consecutive >= 5) {
+            if (_consecutive >= 5) {
                straight = true;
             }
         };
@@ -420,7 +504,7 @@ module poker::poker_manager {
                 fourOfAKind = fourOfAKind + 1;
             }
         });
-        if (flush && straight) {
+        if (_flush && straight) {
             handType = b"Straight Flush";
             handRank = 9;
         } else if (fourOfAKind > 0) {
@@ -429,7 +513,7 @@ module poker::poker_manager {
         } else if (threeOfAKind > 0 && pairs > 0) {
             handType = b"Full House";
             handRank = 7;
-        } else if (flush) {
+        } else if (_flush) {
             handType = b"Flush";
             handRank = 6;
         } else if (straight) {
@@ -449,13 +533,61 @@ module poker::poker_manager {
         (handType, handRank, highestValue)
     }
 
-    fun evaluateHand(game_metadata: &GameMetadata, player: &Player): (vector<u8>, u8, u8) {
+    fun evaluateHand(communityCards: &vector<Card>, playerCards: &vector<Card>): (vector<u8>, u8, u8) {
         let newCards = vector::empty<Card>();
-        vector::append<Card>(&mut newCards, player.hand);
-        vector::append<Card>(&mut newCards, game_metadata.community);
+        vector::append<Card>(&mut newCards, communityCards);
+        vector::append<Card>(&mut newCards, playerCards);
         evaluateHandDetails(&newCards)
     }
 
-    // TODO: Add back unit tests
+    fun get_game_winner(game_metadata: &mut GameMetadata): address {
+        let evaluations = vector::map(&vector::filter(&game_metadata.players, |player| {
+            player.status == STATUS_ACTIVE
+        }), |player| {
+            let evaluation = evaluateHand(&game_metadata.community, &player.hand);
+            (player.id, evaluation)
+        });
 
+        let (winner, _) = vector::reduce(&evaluations, |prev, current| {
+            if (prev.evaluation.handRank == current.evaluation.handRank) {
+                return if (prev.evaluation.comparisonValue > current.evaluation.comparisonValue) {
+                    prev
+                } else {
+                    current
+                };
+            };
+            return if (prev.evaluation.handRank > current.evaluation.handRank) {
+                prev
+            } else {
+                current
+            };
+        });
+
+        game_metadata.winner = winner.id;
+
+    }
+
+    // Unit Tests
+
+    // Tests all poker hands (from high card to straight flush)
+    #[test(admin = @poker, aptos_framework = @0x1)]
+    fun test_poker_hands() {
+        // Evaluate all hands only take into consideration the value_string and suit_string of the cards, 
+        // disregarding the suit and value fields
+
+        // Test for High Card, 4 hands
+        let game_metadata = create_game_metadata(1, 1);
+
+        // Example: {suit: 0, value: 0, suit_string: b"hearts", value_string: b"2"}
+        let hands = vector[
+            vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"2"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}, Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"4"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"5"}, Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"6"}],
+            vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"2"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}, Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"4"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"5"}, Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"7"}],
+            vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"2"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}, Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"4"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"5"}, Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}],
+            vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"2"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}, Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"4"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"5"}, Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"9"}]
+        ];
+
+        let winner = get_game_winner(&mut game_metadata);
+
+        debug::print(&winner);
+    }
 }
