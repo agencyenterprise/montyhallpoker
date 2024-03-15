@@ -6,11 +6,11 @@ module poker::poker_manager {
     use 0x1::aptos_account;
     use 0x1::aptos_coin;
     use std::account;
-    use std::string;
     use std::option;
     use aptos_framework::randomness;
     use aptos_framework::timestamp;
     use std::simple_map::{SimpleMap,Self};
+    #[test_only]
     use std::debug;
 
     /// Error codes
@@ -44,7 +44,6 @@ module poker::poker_manager {
     const CALL: u64 = 2;
     const RAISE: u64 = 3;
     const ALL_IN: u64 = 4;
-    const BET: u64 = 5;
 
     // Stages
     const STAGE_PREFLOP: u8 = 0;
@@ -90,9 +89,7 @@ module poker::poker_manager {
         currentPlayerIndex: u8,
         continueBetting: bool,
         order: vector<Card>,
-        playerMove: u32,
         lastRaiser: option::Option<LastRaiser>,
-        gameEnded: bool,
         seed: u8,
         id: u64,
         room_id: u64,
@@ -213,9 +210,7 @@ module poker::poker_manager {
             currentPlayerIndex: 0,
             continueBetting: true,
             order: vector::empty(),
-            playerMove: 0,
             lastRaiser: option::none<LastRaiser>(),
-            gameEnded: false,
             seed: 0,
             starter: random_player,
             last_action_timestamp: 0,
@@ -285,6 +280,12 @@ module poker::poker_manager {
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
         assert!(vector::length(&game_metadata.players) == 4, EGAME_NOT_READY);
         game_metadata.state = GAMESTATE_IN_PROGRESS;
+        game_metadata.deck = vector::empty();
+        game_metadata.community = vector::empty();
+        game_metadata.currentRound = 0;
+        game_metadata.stage = STAGE_PREFLOP;
+        game_metadata.currentPlayerIndex = game_metadata.starter;
+        
     }
 
     public fun winner(winner_address: address) acquires GameState {
@@ -404,17 +405,45 @@ module poker::poker_manager {
             game_metadata.pot = game_metadata.pot + amount;
             game_metadata.current_bet = amount;
             player.status = STATUS_ALL_IN;
-        } else if (action == BET) {
-            assert!(amount >= game_metadata.current_bet, EINVALID_MOVE);
-            player.current_bet = player.current_bet + amount;
-            game_metadata.pot = game_metadata.pot + amount;
-            game_metadata.current_bet = amount;
         };
 
         game_metadata.last_action_timestamp = timestamp::now_seconds();
 
         let nextPlayer = vector::borrow(&game_metadata.players, (player_index + 1) % vector::length(&game_metadata.players));
         game_metadata.turn = nextPlayer.id;
+        game_metadata.currentPlayerIndex = ((player_index + 1) % vector::length(&game_metadata.players) as u8);
+        
+
+    }
+
+    public fun move_to_next_stage(game_id: u64) acquires GameState {
+        assert_is_initialized();
+
+        let gamestate = borrow_global_mut<GameState>(@poker);
+        assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
+
+        let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+
+        if (game_metadata.stage == STAGE_PREFLOP) {
+            initializeDeck(game_metadata);
+            dealHoleCards(game_metadata);
+            dealCommunityCards(game_metadata, 3);
+        } else if (game_metadata.stage == STAGE_FLOP) {
+            dealCommunityCards(game_metadata, 1);
+        } else if (game_metadata.stage == STAGE_TURN) {
+            dealCommunityCards(game_metadata, 1);
+        } else if (game_metadata.stage == STAGE_RIVER) {
+            dealCommunityCards(game_metadata, 1);
+        } else if (game_metadata.stage == STAGE_SHOWDOWN) {
+            let winner = get_game_winner(game_metadata);
+            game_metadata.winner = vector::borrow(&game_metadata.players, (winner.player_index as u64)).id;
+            game_metadata.state = GAMESTATE_CLOSED;
+        };
+
+        game_metadata.stage = (game_metadata.stage + 1) % 5;
+        game_metadata.currentPlayerIndex = game_metadata.starter;
+        game_metadata.turn = vector::borrow(&game_metadata.players, (game_metadata.starter as u64)).id;
+        game_metadata.current_bet = 0;
     }
 
     // Skip player's turn if they are inactive (30 seconds without action), anyone can call this function
@@ -426,11 +455,11 @@ module poker::poker_manager {
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
-        let current_player = vector::borrow(&game_metadata.players, (game_metadata.currentPlayerIndex as u64));
         let time_diff = timestamp::now_seconds() - game_metadata.last_action_timestamp;
         if (time_diff > 30) {
             let nextPlayer = vector::borrow(&game_metadata.players, ((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players));
             game_metadata.turn = nextPlayer.id;
+            game_metadata.currentPlayerIndex = (((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players) as u8);
         }
     }
 
@@ -460,15 +489,15 @@ module poker::poker_manager {
 
 
     fun dealHoleCards(game_metadata: &mut GameMetadata) {
-    let i = 0;
-    let players_len = vector::length(&game_metadata.players);
-    while (i < players_len) {
-        let player = vector::borrow_mut(&mut game_metadata.players, i);
-        vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
-        vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
-        i = i + 1;
-    };
-}
+        let i = 0;
+        let players_len = vector::length(&game_metadata.players);
+        while (i < players_len) {
+            let player = vector::borrow_mut(&mut game_metadata.players, i);
+            vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
+            vector::push_back(&mut player.hand, vector::pop_back(&mut game_metadata.deck));
+            i = i + 1;
+        };
+    }
 
 
     fun dealCommunityCards(game_metadata: &mut GameMetadata, number: u8) {
