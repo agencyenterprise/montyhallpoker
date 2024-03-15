@@ -528,17 +528,34 @@ module poker::poker_manager {
             *count >= 5 
         });
 
-        let _consecutive: u8 = 0;
+        let consecutiveCount: u8 = 0;
+        let lastValue: u8 = 0;
+
         for (idx in 0..13) {
-            let hasConsecutive = simple_map::contains_key<u8, u8>(&values, &idx);
-            if (!hasConsecutive) {
-                _consecutive = 0;
-            } else {
-                _consecutive = *simple_map::borrow<u8, u8>(&values, &idx) + 1;
+            if (simple_map::contains_key<u8, u8>(&values, &idx)) {
+                if (consecutiveCount == 0) {
+                    
+                    consecutiveCount = 1;
+                    lastValue = idx;
+                } else if (idx == lastValue + 1) {
+                    
+                    consecutiveCount = consecutiveCount + 1;
+                    lastValue = idx;
+
+                    if (consecutiveCount >= 5) {
+                        straight = true;
+                        break
+                    };
+                } else {
+                    consecutiveCount = 1;
+                    lastValue = idx;
+                };
             };
-            if (_consecutive >= 5) {
-               straight = true;
-            }
+
+            if (idx == 3 && consecutiveCount == 4 && simple_map::contains_key<u8, u8>(&values, &12)) {
+                straight = true;
+                break
+            };
         };
         
         vector::for_each<u8>(simple_map::values<u8, u8>(&values), |value| {
@@ -550,9 +567,6 @@ module poker::poker_manager {
                 fourOfAKind = fourOfAKind + 1;
             }
         });
-        debug::print(&values);
-        debug::print(&string::utf8(b"Pairs:"));
-        debug::print(&pairs);
         
         if (_flush && straight) {
             handType = b"Straight Flush";
@@ -605,8 +619,6 @@ module poker::poker_manager {
                     comparison_value: highest_value,
                     hand_type: hand_type,
                 };
-                debug::print(&evaluation);
-                debug::print(&string::utf8(evaluation.hand_type));
                 vector::push_back(&mut evaluations, evaluation);
             };
             i = i + 1;
@@ -730,8 +742,6 @@ module poker::poker_manager {
 
         winner = get_game_winner(&mut game_metadata);
 
-        debug::print(&winner);
-
         assert!(winner.player_index == 1, EINVALID_GAME);
 
         // Three of a kind
@@ -770,7 +780,7 @@ module poker::poker_manager {
         );
 
         player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"6"}];
+        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"4"}];
         player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"clubs", value_string: b"9"}];
         player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
 
@@ -778,8 +788,108 @@ module poker::poker_manager {
 
         winner = get_game_winner(&mut game_metadata);
 
-        debug::print(&winner);
+        assert!(winner.player_index == 0, EINVALID_GAME);
+
+        // Flush
+
+        game_metadata.community = vector::empty();
+
+        vector::append(&mut game_metadata.community, 
+            vector[
+            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"2"},
+            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"5"},
+            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"4"},
+            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"},
+            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"king"},
+            ]
+        );
+
+        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}];
+        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"4"}];
+        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"9"}];
+        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+
+        game_metadata.players = vector[player1, player2, player3, player4];
+
+
+        winner = get_game_winner(&mut game_metadata);
+
+        assert!(winner.player_index == 2, EINVALID_GAME);
+
+        // Full house
+
+        game_metadata.community = vector::empty();
+
+        vector::append(&mut game_metadata.community, 
+            vector[
+            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"ace"},
+            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"5"},
+            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"4"},
+            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"},
+            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"queen"},
+            ]
+        );
+
+        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"clubs", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"ace"}];
+        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"4"}];
+        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"9"}];
+        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+
+        game_metadata.players = vector[player1, player2, player3, player4];
+
+
+        winner = get_game_winner(&mut game_metadata);
 
         assert!(winner.player_index == 0, EINVALID_GAME);
+
+        // Four of a kind
+        
+        game_metadata.community = vector::empty();
+
+        vector::append(&mut game_metadata.community, 
+            vector[
+            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"ace"},
+            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"5"},
+            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"4"},
+            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"},
+            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"queen"},
+            ]
+        );
+
+        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"clubs", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"ace"}];
+        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"queen"}, Card{suit: 3, value: 0, suit_string: b"diamonds", value_string: b"queen"}];
+        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"9"}];
+        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+
+        game_metadata.players = vector[player1, player2, player3, player4];
+
+        winner = get_game_winner(&mut game_metadata);
+
+        assert!(winner.player_index == 1, EINVALID_GAME);
+
+        // Straight flush
+
+        game_metadata.community = vector::empty();
+
+        vector::append(&mut game_metadata.community, 
+            vector[
+            Card{suit: 0, value: 0, suit_string: b"diamonds", value_string: b"6"},
+            Card{suit: 1, value: 0, suit_string: b"spades", value_string: b"4"},
+            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"6"},
+            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"5"},
+            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"},
+            ]
+        );
+
+        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"spades", value_string: b"king"}];
+        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"10"}, Card{suit: 1, value: 0, suit_string: b"spades", value_string: b"9"}];
+        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"8"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"7"}];
+
+        game_metadata.players = vector[player1, player2, player3, player4];
+
+        winner = get_game_winner(&mut game_metadata);
+
+        assert!(winner.player_index == 3, EINVALID_GAME);
     }
 }
