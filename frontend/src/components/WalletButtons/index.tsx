@@ -57,7 +57,7 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
 
       const authKey = TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey)
 
-      console.log(authKey.derivedAddress())
+      console.log(authKey.derivedAddress().toString())
     } catch (error) {
       console.warn(error);
       window.alert("Failed to connect wallet");
