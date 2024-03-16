@@ -260,7 +260,7 @@ module poker::poker_manager {
 
     // Returns the last game (highest id) of a specific room
     #[view]
-    public fun get_game_by_room_id(room_id: u64): option::Option<GameMetadata> acquires GameState {
+    public fun get_last_game_by_room_id(room_id: u64): option::Option<GameMetadata> acquires GameState {
         assert_is_initialized();
         let gamestate = borrow_global<GameState>(@poker);
         let keys = simple_map::keys(&gamestate.games);
@@ -287,7 +287,6 @@ module poker::poker_manager {
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
         assert!(vector::length(&game_metadata.players) == 4, EGAME_NOT_READY);
         game_metadata.state = GAMESTATE_IN_PROGRESS;
-        game_metadata.deck = vector::empty();
         game_metadata.community = vector::empty();
         game_metadata.currentRound = 0;
         game_metadata.stage = STAGE_PREFLOP;
@@ -355,7 +354,13 @@ module poker::poker_manager {
     public entry fun create_game(acc: &signer, room_id: u64) acquires GameState {
         let addr = signer::address_of(acc);
         assert_is_initialized();
-        assert_is_owner(addr);
+
+        // check if room_id's last game is closed
+        let last_game = get_last_game_by_room_id(room_id);
+        if (option::is_some(&last_game)) {
+            let game_metadata = option::borrow(&last_game);
+            assert!(game_metadata.state == GAMESTATE_CLOSED, EINVALID_GAME);
+        };
 
         let gamestate = borrow_global_mut<GameState>(@poker);
 
@@ -392,10 +397,6 @@ module poker::poker_manager {
 
         vector::push_back(&mut game_metadata.players, Player{id: addr, hand: vector::empty(), status: STATUS_ACTIVE, current_bet: 0});
         game_metadata.pot = game_metadata.pot + amount;
-        
-        debug::print(&game_metadata.pot);
-        debug::print(&game_metadata.pot);
-        debug::print(&game_metadata.pot);
 
         if (!exists<UserGames>(addr)) {
             move_to(from, UserGames {
