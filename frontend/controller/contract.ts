@@ -16,11 +16,16 @@ export type DeckCard = {
   value_string?: string;
 };
 
+export enum PlayerStatus {
+  Active = 0,
+  Folded = 1,
+  AllIn = 2,
+}
 type Player = {
   current_bet: string;
   hand: DeckCard[];
   id: string;
-  status: number;
+  status: PlayerStatus;
 };
 export type GameState = {
   community: DeckCard[];

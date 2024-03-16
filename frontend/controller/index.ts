@@ -1,11 +1,12 @@
 import { connectToDatabase } from "./mongodb";
-import { getGameById, GameState, DeckCard } from "./contract";
+import { getGameById, GameState, DeckCard, PlayerStatus } from "./contract";
 import { verifySignature, getAddressFromPublicKey } from "./security";
 import crypto from "crypto";
 type CardValueMapping = Record<number, string>;
 type SuitValueMapping = Record<number, string>;
 export type Hand = { suit: string; value: string };
 export type UserSignedMessage = { signedMessage: string; message: string };
+
 const getGameMapping = async (gameId: number) => {
   const { db } = await connectToDatabase();
   const mappings = db.collection("mappings");
@@ -79,6 +80,7 @@ const generateCardMappings = async () => {
 
   // Suits are fixed, so a simple mapping is sufficient
   const suits = ["clubs", "diamonds", "hearts", "spades"];
+  shuffleArray(suits);
   const suitMapping: Record<number, string> = {};
   for (let i = 0; i < suits.length; i++) {
     suitMapping[i] = suits[i];
@@ -136,6 +138,9 @@ export const revealPlayerCard = async (
     value: v.value,
     suit: v.suit,
   }));
+  if (currentPlayer!.status != PlayerStatus.Active) {
+    throw new Error("Player is not active in this game");
+  }
   const playerPrivateCards: Hand[] = await Promise.all(
     playerCards.map(
       async (v): Promise<Hand> => revealMappingFromDB(gameId, v.value, v.suit)
