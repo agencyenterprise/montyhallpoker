@@ -10,6 +10,7 @@ import {
 import { cn } from "@/utils/styling";
 const buttonStyles = "nes-btn is-primary";
 import { HexString, TxnBuilderTypes } from 'aptos';
+import { getAptosClient } from "@/utils/aptosClient";
 export const WalletButtons = () => {
   const { wallets, connected, disconnect, isLoading } = useWallet();
 
@@ -43,7 +44,7 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
     wallet.readyState === WalletReadyState.Installed ||
     wallet.readyState === WalletReadyState.Loadable;
   const mobileSupport = wallet.deeplinkProvider;
-
+  
   const onWalletConnectRequest = async (walletName: WalletName) => {
     try {
       await connect(walletName);
