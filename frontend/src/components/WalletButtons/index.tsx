@@ -1,26 +1,17 @@
 "use client";
 
-import {
-  useWallet,
-  WalletReadyState,
-  Wallet,
-  isRedirectable,
-  WalletName,
-} from "@aptos-labs/wallet-adapter-react";
+import { useWallet, WalletReadyState, Wallet, isRedirectable, WalletName } from "@aptos-labs/wallet-adapter-react";
 import { cn } from "@/utils/styling";
-const buttonStyles = "nes-btn is-primary";
-import { HexString, TxnBuilderTypes } from 'aptos';
-import { getAptosClient } from "@/utils/aptosClient";
+
+const buttonStyles = "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
+
 export const WalletButtons = () => {
   const { wallets, connected, disconnect, isLoading } = useWallet();
 
   if (connected) {
     return (
       <div className="flex flex-row">
-        <div
-          className={cn(buttonStyles, "hover:scale-110 btn-small")}
-          onClick={disconnect}
-        >
+        <div className={cn(buttonStyles, "hover:scale-110 btn-small")} onClick={disconnect}>
           Disconnect
         </div>
       </div>
@@ -28,11 +19,7 @@ export const WalletButtons = () => {
   }
 
   if (isLoading || !wallets[0]) {
-    return (
-      <div className={cn(buttonStyles, "opacity-50 cursor-not-allowed")}>
-        Loading...
-      </div>
-    );
+    return <div className={cn(buttonStyles, "opacity-50 cursor-not-allowed")}>Loading...</div>;
   }
 
   return <WalletView wallet={wallets[0]} />;
@@ -41,24 +28,23 @@ export const WalletButtons = () => {
 const WalletView = ({ wallet }: { wallet: Wallet }) => {
   const { connect } = useWallet();
   const isWalletReady =
-    wallet.readyState === WalletReadyState.Installed ||
-    wallet.readyState === WalletReadyState.Loadable;
+    wallet.readyState === WalletReadyState.Installed || wallet.readyState === WalletReadyState.Loadable;
   const mobileSupport = wallet.deeplinkProvider;
-  
+
   const onWalletConnectRequest = async (walletName: WalletName) => {
     try {
       await connect(walletName);
-      const account = await (window as any)['aptos'].account();
+      const account = await (window as any)["aptos"].account();
       console.log(account);
       let pubKey = account.publicKey;
 
       let key = HexString.ensure(pubKey).toUint8Array();
 
-      pubKey = new TxnBuilderTypes.Ed25519PublicKey(key)
+      pubKey = new TxnBuilderTypes.Ed25519PublicKey(key);
 
-      const authKey = TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey)
+      const authKey = TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey);
 
-      console.log(authKey.derivedAddress().toString())
+      console.log(authKey.derivedAddress().toString());
     } catch (error) {
       console.warn(error);
       window.alert("Failed to connect wallet");
@@ -105,10 +91,7 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
     // desktop
     return (
       <button
-        className={cn(
-          buttonStyles,
-          isWalletReady ? "hover:scale-110" : "opacity-50 cursor-not-allowed"
-        )}
+        className={cn(buttonStyles, isWalletReady ? "hover:scale-110" : "opacity-50 cursor-not-allowed")}
         disabled={!isWalletReady}
         key={wallet.name}
         onClick={() => onWalletConnectRequest(wallet.name)}
