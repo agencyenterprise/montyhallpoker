@@ -1,0 +1,682 @@
+{
+  "players": [
+    {
+      "id": 1,
+      "chips": 895,
+      "hand": [
+        {
+          "suit": 32,
+          "value": 32
+        },
+        {
+          "suit": 46,
+          "value": 46
+        }
+      ],
+      "currentBet": 5,
+      "status": "active",
+      "move": 1
+    },
+    {
+      "id": 2,
+      "chips": 895,
+      "hand": [
+        {
+          "suit": 30,
+          "value": 30
+        },
+        {
+          "suit": 35,
+          "value": 35
+        }
+      ],
+      "currentBet": 0,
+      "status": "active",
+      "move": 1
+    },
+    {
+      "id": 3,
+      "chips": 895,
+      "hand": [
+        {
+          "suit": 44,
+          "value": 44
+        },
+        {
+          "suit": 6,
+          "value": 6
+        }
+      ],
+      "currentBet": 5,
+      "status": "active",
+      "move": 3
+    },
+    {
+      "id": 4,
+      "chips": 895,
+      "hand": [
+        {
+          "suit": 5,
+          "value": 5
+        },
+        {
+          "suit": 40,
+          "value": 40
+        }
+      ],
+      "currentBet": 5,
+      "status": "active",
+      "move": 1
+    }
+  ],
+  "deck": [
+    {
+      "suit": 2,
+      "value": 2
+    },
+    {
+      "suit": 13,
+      "value": 13
+    },
+    {
+      "suit": 18,
+      "value": 18
+    },
+    {
+      "suit": 29,
+      "value": 29
+    },
+    {
+      "suit": 4,
+      "value": 4
+    },
+    {
+      "suit": 41,
+      "value": 41
+    },
+    {
+      "suit": 37,
+      "value": 37
+    },
+    {
+      "suit": 8,
+      "value": 8
+    },
+    {
+      "suit": 48,
+      "value": 48
+    },
+    {
+      "suit": 20,
+      "value": 20
+    },
+    {
+      "suit": 36,
+      "value": 36
+    },
+    {
+      "suit": 51,
+      "value": 51
+    },
+    {
+      "suit": 23,
+      "value": 23
+    },
+    {
+      "suit": 31,
+      "value": 31
+    },
+    {
+      "suit": 14,
+      "value": 14
+    },
+    {
+      "suit": 27,
+      "value": 27
+    },
+    {
+      "suit": 17,
+      "value": 17
+    },
+    {
+      "suit": 38,
+      "value": 38
+    },
+    {
+      "suit": 11,
+      "value": 11
+    },
+    {
+      "suit": 1,
+      "value": 1
+    },
+    {
+      "suit": 24,
+      "value": 24
+    },
+    {
+      "suit": 50,
+      "value": 50
+    },
+    {
+      "suit": 43,
+      "value": 43
+    },
+    {
+      "suit": 9,
+      "value": 9
+    },
+    {
+      "suit": 22,
+      "value": 22
+    },
+    {
+      "suit": 16,
+      "value": 16
+    },
+    {
+      "suit": 49,
+      "value": 49
+    },
+    {
+      "suit": 7,
+      "value": 7
+    },
+    {
+      "suit": 15,
+      "value": 15
+    },
+    {
+      "suit": 39,
+      "value": 39
+    },
+    {
+      "suit": 34,
+      "value": 34
+    },
+    {
+      "suit": 25,
+      "value": 25
+    },
+    {
+      "suit": 3,
+      "value": 3
+    },
+    {
+      "suit": 33,
+      "value": 33
+    },
+    {
+      "suit": 10,
+      "value": 10
+    },
+    {
+      "suit": 28,
+      "value": 28
+    },
+    {
+      "suit": 47,
+      "value": 47
+    },
+    {
+      "suit": 45,
+      "value": 45
+    },
+    {
+      "suit": 0,
+      "value": 0
+    },
+    {
+      "suit": 19,
+      "value": 19
+    },
+    {
+      "suit": 21,
+      "value": 21
+    }
+  ],
+  "pot": 420,
+  "currentBet": 5,
+  "communityCards": [
+    {
+      "suit": 26,
+      "value": 26
+    },
+    {
+      "suit": 12,
+      "value": 12
+    },
+    {
+      "suit": 42,
+      "value": 42
+    }
+  ],
+  "currentRound": 1,
+  "stage": "flop",
+  "currentPlayerIndex": 1,
+  "continueBetting": true,
+  "order": [
+    {
+      "suit": 0,
+      "value": 0
+    },
+    {
+      "suit": 1,
+      "value": 1
+    },
+    {
+      "suit": 2,
+      "value": 2
+    },
+    {
+      "suit": 3,
+      "value": 3
+    },
+    {
+      "suit": 4,
+      "value": 4
+    },
+    {
+      "suit": 5,
+      "value": 5
+    },
+    {
+      "suit": 6,
+      "value": 6
+    },
+    {
+      "suit": 7,
+      "value": 7
+    },
+    {
+      "suit": 8,
+      "value": 8
+    },
+    {
+      "suit": 9,
+      "value": 9
+    },
+    {
+      "suit": 10,
+      "value": 10
+    },
+    {
+      "suit": 11,
+      "value": 11
+    },
+    {
+      "suit": 12,
+      "value": 12
+    },
+    {
+      "suit": 13,
+      "value": 13
+    },
+    {
+      "suit": 14,
+      "value": 14
+    },
+    {
+      "suit": 15,
+      "value": 15
+    },
+    {
+      "suit": 16,
+      "value": 16
+    },
+    {
+      "suit": 17,
+      "value": 17
+    },
+    {
+      "suit": 18,
+      "value": 18
+    },
+    {
+      "suit": 19,
+      "value": 19
+    },
+    {
+      "suit": 20,
+      "value": 20
+    },
+    {
+      "suit": 21,
+      "value": 21
+    },
+    {
+      "suit": 22,
+      "value": 22
+    },
+    {
+      "suit": 23,
+      "value": 23
+    },
+    {
+      "suit": 24,
+      "value": 24
+    },
+    {
+      "suit": 25,
+      "value": 25
+    },
+    {
+      "suit": 26,
+      "value": 26
+    },
+    {
+      "suit": 27,
+      "value": 27
+    },
+    {
+      "suit": 28,
+      "value": 28
+    },
+    {
+      "suit": 29,
+      "value": 29
+    },
+    {
+      "suit": 30,
+      "value": 30
+    },
+    {
+      "suit": 31,
+      "value": 31
+    },
+    {
+      "suit": 32,
+      "value": 32
+    },
+    {
+      "suit": 33,
+      "value": 33
+    },
+    {
+      "suit": 34,
+      "value": 34
+    },
+    {
+      "suit": 35,
+      "value": 35
+    },
+    {
+      "suit": 36,
+      "value": 36
+    },
+    {
+      "suit": 37,
+      "value": 37
+    },
+    {
+      "suit": 38,
+      "value": 38
+    },
+    {
+      "suit": 39,
+      "value": 39
+    },
+    {
+      "suit": 40,
+      "value": 40
+    },
+    {
+      "suit": 41,
+      "value": 41
+    },
+    {
+      "suit": 42,
+      "value": 42
+    },
+    {
+      "suit": 43,
+      "value": 43
+    },
+    {
+      "suit": 44,
+      "value": 44
+    },
+    {
+      "suit": 45,
+      "value": 45
+    },
+    {
+      "suit": 46,
+      "value": 46
+    },
+    {
+      "suit": 47,
+      "value": 47
+    },
+    {
+      "suit": 48,
+      "value": 48
+    },
+    {
+      "suit": 49,
+      "value": 49
+    },
+    {
+      "suit": 50,
+      "value": 50
+    },
+    {
+      "suit": 51,
+      "value": 51
+    }
+  ],
+  "originalDeck": [
+    {
+      "suit": "hearts",
+      "value": "2"
+    },
+    {
+      "suit": "hearts",
+      "value": "3"
+    },
+    {
+      "suit": "hearts",
+      "value": "4"
+    },
+    {
+      "suit": "hearts",
+      "value": "5"
+    },
+    {
+      "suit": "hearts",
+      "value": "6"
+    },
+    {
+      "suit": "hearts",
+      "value": "7"
+    },
+    {
+      "suit": "hearts",
+      "value": "8"
+    },
+    {
+      "suit": "hearts",
+      "value": "9"
+    },
+    {
+      "suit": "hearts",
+      "value": "10"
+    },
+    {
+      "suit": "hearts",
+      "value": "jack"
+    },
+    {
+      "suit": "hearts",
+      "value": "queen"
+    },
+    {
+      "suit": "hearts",
+      "value": "king"
+    },
+    {
+      "suit": "hearts",
+      "value": "ace"
+    },
+    {
+      "suit": "diamonds",
+      "value": "2"
+    },
+    {
+      "suit": "diamonds",
+      "value": "3"
+    },
+    {
+      "suit": "diamonds",
+      "value": "4"
+    },
+    {
+      "suit": "diamonds",
+      "value": "5"
+    },
+    {
+      "suit": "diamonds",
+      "value": "6"
+    },
+    {
+      "suit": "diamonds",
+      "value": "7"
+    },
+    {
+      "suit": "diamonds",
+      "value": "8"
+    },
+    {
+      "suit": "diamonds",
+      "value": "9"
+    },
+    {
+      "suit": "diamonds",
+      "value": "10"
+    },
+    {
+      "suit": "diamonds",
+      "value": "jack"
+    },
+    {
+      "suit": "diamonds",
+      "value": "queen"
+    },
+    {
+      "suit": "diamonds",
+      "value": "king"
+    },
+    {
+      "suit": "diamonds",
+      "value": "ace"
+    },
+    {
+      "suit": "clubs",
+      "value": "2"
+    },
+    {
+      "suit": "clubs",
+      "value": "3"
+    },
+    {
+      "suit": "clubs",
+      "value": "4"
+    },
+    {
+      "suit": "clubs",
+      "value": "5"
+    },
+    {
+      "suit": "clubs",
+      "value": "6"
+    },
+    {
+      "suit": "clubs",
+      "value": "7"
+    },
+    {
+      "suit": "clubs",
+      "value": "8"
+    },
+    {
+      "suit": "clubs",
+      "value": "9"
+    },
+    {
+      "suit": "clubs",
+      "value": "10"
+    },
+    {
+      "suit": "clubs",
+      "value": "jack"
+    },
+    {
+      "suit": "clubs",
+      "value": "queen"
+    },
+    {
+      "suit": "clubs",
+      "value": "king"
+    },
+    {
+      "suit": "clubs",
+      "value": "ace"
+    },
+    {
+      "suit": "spades",
+      "value": "2"
+    },
+    {
+      "suit": "spades",
+      "value": "3"
+    },
+    {
+      "suit": "spades",
+      "value": "4"
+    },
+    {
+      "suit": "spades",
+      "value": "5"
+    },
+    {
+      "suit": "spades",
+      "value": "6"
+    },
+    {
+      "suit": "spades",
+      "value": "7"
+    },
+    {
+      "suit": "spades",
+      "value": "8"
+    },
+    {
+      "suit": "spades",
+      "value": "9"
+    },
+    {
+      "suit": "spades",
+      "value": "10"
+    },
+    {
+      "suit": "spades",
+      "value": "jack"
+    },
+    {
+      "suit": "spades",
+      "value": "queen"
+    },
+    {
+      "suit": "spades",
+      "value": "king"
+    },
+    {
+      "suit": "spades",
+      "value": "ace"
+    }
+  ],
+  "move": 0,
+  "lastRaiser": null,
+  "gameEnded": false,
+  "dealerPosition": 0
+}
