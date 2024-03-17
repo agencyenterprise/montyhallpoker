@@ -22,6 +22,7 @@ export const AVAILABLE_ROOMS = [
   // "12",
 ];
 
+export const MAX_PLAYER_COUNT = 4;
 export const LOW_STAKES = 5000000; // More or less 0.05 APT
 export const MEDIUM_STAKES = 30000000; // More or less 0.3 APT
 export const HIGH_STAKES = 100000000; // More or less 1 APT
@@ -69,6 +70,7 @@ function GameRoom({ gameId, onEnterRoom }: GameRoomProps) {
   useEffect(() => {
     pullRoomData().catch(console.error);
   });
+
   const pullRoomData = async () => {
     const game = await getGameByRoomId(gameId);
     const stakeOctas = Number(game?.stake || 0);
@@ -89,9 +91,17 @@ function GameRoom({ gameId, onEnterRoom }: GameRoomProps) {
 
     console.log(game);
   };
+
+  const onClick = async () => {
+    if (playerCount >= MAX_PLAYER_COUNT) {
+      return;
+    }
+    await onEnterRoom(gameId);
+  };
+
   return (
     <Table
-      onClick={() => onEnterRoom(gameId)}
+      onClick={onClick}
       title={`Table ${gameId}`}
       playerCount={playerCount}
       buyin={buyin}
@@ -148,7 +158,10 @@ function Table({
       onClick={onClick}
     >
       <div
-        className={`cursor-pointer font-bold text-white h-[142px] rounded-[10px] leading-[19px] p-4 flex ${style}`}
+        className={classnames(
+          `font-bold text-white h-[142px] rounded-[10px] leading-[19px] p-4 flex ${style}`,
+          playerCount >= 4 ? "cursor-not-allowed" : "cursor-pointer"
+        )}
       >
         <div className="flex flex-col gap-y-[10px] text-justify">
           <h1>{title}</h1>
