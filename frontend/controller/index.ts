@@ -13,11 +13,7 @@ const getGameMapping = async (gameId: number) => {
   return await mappings.findOne({ gameId });
 };
 
-const insertCardMapping = async (
-  gameId: number,
-  valueMapping: CardValueMapping,
-  suitMapping: SuitValueMapping
-) => {
+const insertCardMapping = async (gameId: number, valueMapping: CardValueMapping, suitMapping: SuitValueMapping) => {
   const gameMapping = await getGameMapping(gameId);
   if (!gameMapping) {
     const { db } = await connectToDatabase();
@@ -27,11 +23,7 @@ const insertCardMapping = async (
   return gameMapping;
 };
 
-const revealMappingFromDB = async (
-  gameId: number,
-  value: number,
-  suit: number
-): Promise<Hand> => {
+const revealMappingFromDB = async (gameId: number, value: number, suit: number): Promise<Hand> => {
   const gameMapping = await getGameMapping(gameId);
   if (!gameMapping) {
     throw new Error("No game found!");
@@ -55,21 +47,7 @@ const generateCardMappings = async () => {
       [array[i], array[j]] = [array[j], array[i]]; // Swap elements
     }
   }
-  const cardValues = [
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "jack",
-    "queen",
-    "king",
-    "ace",
-  ];
+  const cardValues = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "jack", "queen", "king", "ace"];
   shuffleArray(cardValues); // Shuffle to ensure randomness
 
   // Mapping numbers 0-12 to shuffled card values
@@ -103,11 +81,7 @@ const isPlayerPresentOnGame = async (
   players: string[]
 ): Promise<boolean> => {
   const userAddress = getAddressFromPublicKey(pubKey);
-  const isSignatureValid = await verifySignature(
-    pubKey,
-    userSignedMessage.message,
-    userSignedMessage.signedMessage
-  );
+  const isSignatureValid = await verifySignature(pubKey, userSignedMessage.message, userSignedMessage.signedMessage);
   if (!isSignatureValid) {
     throw new Error("Invalid signature!");
   }
@@ -124,11 +98,7 @@ export const revealPlayerCard = async (
     throw new Error("Game not found");
   }
   const players = extractGamePlayers(game);
-  const isPresentOnGame = await isPlayerPresentOnGame(
-    userPubKey,
-    userSignedMessage,
-    players
-  );
+  const isPresentOnGame = await isPlayerPresentOnGame(userPubKey, userSignedMessage, players);
   if (!isPresentOnGame) {
     throw new Error("User does not have permission to reveal cards");
   }
@@ -142,31 +112,17 @@ export const revealPlayerCard = async (
     throw new Error("Player is not active in this game");
   }
   const playerPrivateCards: Hand[] = await Promise.all(
-    playerCards.map(
-      async (v): Promise<Hand> => revealMappingFromDB(gameId, v.value, v.suit)
-    )
+    playerCards.map(async (v): Promise<Hand> => revealMappingFromDB(gameId, v.value, v.suit))
   );
   return playerPrivateCards;
 };
 
-const checkIfCardBelongToCommunityDeck = (
-  tableCard: DeckCard,
-  communityDeck: DeckCard[]
-): boolean => {
-  return !!communityDeck.find(
-    (v) => v.suit == tableCard.suit && v.value == tableCard.value
-  );
+const checkIfCardBelongToCommunityDeck = (tableCard: DeckCard, communityDeck: DeckCard[]): boolean => {
+  return !!communityDeck.find((v) => v.suit == tableCard.suit && v.value == tableCard.value);
 };
 
-const checkIfTableCardsBelongToCommunityDeck = (
-  tableCards: DeckCard[],
-  communityDeck: DeckCard[]
-): boolean => {
-  return tableCards.reduce(
-    (acc, value) =>
-      acc && checkIfCardBelongToCommunityDeck(value, communityDeck),
-    true
-  );
+const checkIfTableCardsBelongToCommunityDeck = (tableCards: DeckCard[], communityDeck: DeckCard[]): boolean => {
+  return tableCards.reduce((acc, value) => acc && checkIfCardBelongToCommunityDeck(value, communityDeck), true);
 };
 
 const getTableCards = (game: GameState) => {
@@ -180,10 +136,7 @@ export const revealCommunityCards = async (gameId: number): Promise<Hand[]> => {
   }
   const tableCards = getTableCards(game);
   const communityDeck = game!.deck;
-  const areTableCardsCommunityCards = checkIfTableCardsBelongToCommunityDeck(
-    tableCards,
-    communityDeck
-  );
+  const areTableCardsCommunityCards = checkIfTableCardsBelongToCommunityDeck(tableCards, communityDeck);
   if (!areTableCardsCommunityCards) {
     throw new Error("Table cards are not community Cards");
   }

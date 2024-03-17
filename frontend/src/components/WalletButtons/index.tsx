@@ -1,18 +1,11 @@
 "use client";
 
-import {
-  useWallet,
-  WalletReadyState,
-  Wallet,
-  isRedirectable,
-  WalletName,
-} from "@aptos-labs/wallet-adapter-react";
+import { useWallet, WalletReadyState, Wallet, isRedirectable, WalletName } from "@aptos-labs/wallet-adapter-react";
 import { cn } from "@/utils/styling";
 import { HexString, TxnBuilderTypes } from "aptos";
 import Button from "../Button";
 
-export const buttonStyles =
-  "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
+export const buttonStyles = "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
 
 export const WalletButtons = () => {
   const { wallets, connected, disconnect, isLoading } = useWallet();
@@ -33,8 +26,7 @@ export const WalletButtons = () => {
 const WalletView = ({ wallet }: { wallet: Wallet }) => {
   const { connect } = useWallet();
   const isWalletReady =
-    wallet.readyState === WalletReadyState.Installed ||
-    wallet.readyState === WalletReadyState.Loadable;
+    wallet.readyState === WalletReadyState.Installed || wallet.readyState === WalletReadyState.Loadable;
   const mobileSupport = wallet.deeplinkProvider;
 
   const onWalletConnectRequest = async (walletName: WalletName) => {
@@ -48,8 +40,7 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
 
       pubKey = new TxnBuilderTypes.Ed25519PublicKey(key);
 
-      const authKey =
-        TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey);
+      const authKey = TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey);
 
       console.log(authKey.derivedAddress().toString());
     } catch (error) {
@@ -70,10 +61,7 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
    */
   return (
     <Button
-      className={cn(
-        buttonStyles,
-        isWalletReady ? "hover:scale-110" : "opacity-50 cursor-not-allowed"
-      )}
+      className={cn(buttonStyles, isWalletReady ? "hover:scale-110" : "opacity-50 cursor-not-allowed")}
       disabled={!isWalletReady}
       key={wallet.name}
       onClick={() => onWalletConnectRequest(wallet.name)}
