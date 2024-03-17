@@ -8,9 +8,9 @@ import {
   WalletName,
 } from "@aptos-labs/wallet-adapter-react";
 import { cn } from "@/utils/styling";
-
 const buttonStyles = "nes-btn is-primary";
-
+import { HexString, TxnBuilderTypes } from 'aptos';
+import { getAptosClient } from "@/utils/aptosClient";
 export const WalletButtons = () => {
   const { wallets, connected, disconnect, isLoading } = useWallet();
 
@@ -44,10 +44,21 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
     wallet.readyState === WalletReadyState.Installed ||
     wallet.readyState === WalletReadyState.Loadable;
   const mobileSupport = wallet.deeplinkProvider;
-
+  
   const onWalletConnectRequest = async (walletName: WalletName) => {
     try {
       await connect(walletName);
+      const account = await (window as any)['aptos'].account();
+      console.log(account);
+      let pubKey = account.publicKey;
+
+      let key = HexString.ensure(pubKey).toUint8Array();
+
+      pubKey = new TxnBuilderTypes.Ed25519PublicKey(key)
+
+      const authKey = TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey)
+
+      console.log(authKey.derivedAddress().toString())
     } catch (error) {
       console.warn(error);
       window.alert("Failed to connect wallet");
