@@ -502,11 +502,10 @@ module poker::poker_manager {
             player.current_bet = player.current_bet + diff;
             game_metadata.pot = game_metadata.pot + diff;
         } else if (action == RAISE) {
-            assert!(amount > game_metadata.current_bet, EINVALID_MOVE);
-            // Raise has to be at least 1.5x the current bet
-            // TODO: Change minimum to be previous bet or raise + difference between previous bet or raise and its preceding bet or raise
-            debug::print(&fixed_point64::multiply_u128((game_metadata.current_bet as u128), fixed_point64::create_from_rational(3, 2)));
-            assert!(amount >= (fixed_point64::multiply_u128((game_metadata.current_bet as u128), fixed_point64::create_from_rational(3, 2)) as u64), ERAISE_TOO_LOW);
+            debug::print(&string::utf8(b"Amount has to be: "));
+            debug::print(&(game_metadata.current_bet + game_metadata.stake));
+            // Raise has to be at least current bet + stake
+            assert!(amount >= game_metadata.current_bet + game_metadata.stake, ERAISE_TOO_LOW);
             player.current_bet = player.current_bet + amount;
             game_metadata.pot = game_metadata.pot + amount;
             game_metadata.current_bet = amount;
@@ -938,12 +937,12 @@ module poker::poker_manager {
 
         {
             perform_action(account4, game_id, RAISE, 8000000);
-            perform_action(account1, game_id, RAISE, 12000000);
-            perform_action(account2, game_id, CALL, 12000000);
-            perform_action(account3, game_id, RAISE, 16000000);
-            perform_action(account4, game_id, CALL, 16000000);
-            perform_action(account1, game_id, CALL, 16000000);
-            perform_action(account2, game_id, CALL, 16000000);
+            perform_action(account1, game_id, RAISE, 13000000);
+            perform_action(account2, game_id, CALL, 13000000);
+            perform_action(account3, game_id, RAISE, 18000000);
+            perform_action(account4, game_id, CALL, 18000000);
+            perform_action(account1, game_id, CALL, 18000000);
+            perform_action(account2, game_id, CALL, 18000000);
 
             let game_metadata = get_game_metadata_by_id(game_id);
 
@@ -955,10 +954,10 @@ module poker::poker_manager {
             perform_action(account4, game_id, CHECK, 0);
             perform_action(account1, game_id, CHECK, 0);
             perform_action(account2, game_id, CHECK, 0);
-            perform_action(account3, game_id, RAISE, 1000);
-            perform_action(account4, game_id, CALL, 1000);
-            perform_action(account1, game_id, CALL, 1000);
-            perform_action(account2, game_id, CALL, 1000);
+            perform_action(account3, game_id, RAISE, 10000000);
+            perform_action(account4, game_id, CALL, 10000000);
+            perform_action(account1, game_id, CALL, 10000000);
+            perform_action(account2, game_id, CALL, 10000000);
 
             let game_metadata = get_game_metadata_by_id(game_id);
 
