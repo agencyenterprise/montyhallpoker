@@ -31,8 +31,8 @@ export default function Home() {
   const { connected } = useWallet();
   const router = useRouter();
 
-  const goToTable = () => {
-    router.push("/table");
+  const goToTable = (roomId: string) => {
+    router.push(`/table/${roomId}`);
   };
 
   return (
@@ -43,11 +43,7 @@ export default function Home() {
         <div className="grid grid-cols-4 gap-6">
           {AVAILABLE_ROOMS.map((room) => {
             return (
-              <GameRoom
-                key={room}
-                onEnterRoom={() => goToTable()}
-                gameId={room}
-              />
+              <GameRoom key={room} onEnterRoom={goToTable} roomId={room} />
             );
           })}
         </div>
@@ -57,11 +53,11 @@ export default function Home() {
 }
 
 interface GameRoomProps extends React.HTMLAttributes<HTMLButtonElement> {
-  gameId: string;
+  roomId: string;
   onEnterRoom: (roomId: string) => void;
 }
 
-function GameRoom({ gameId, onEnterRoom }: GameRoomProps) {
+function GameRoom({ roomId, onEnterRoom }: GameRoomProps) {
   const [playerCount, setPlayerCount] = useState(0);
   const [buyin, setBuyin] = useState(0);
   const [maxPot, setMaxPot] = useState(0);
@@ -72,7 +68,7 @@ function GameRoom({ gameId, onEnterRoom }: GameRoomProps) {
   });
 
   const pullRoomData = async () => {
-    const game = await getGameByRoomId(gameId);
+    const game = await getGameByRoomId(roomId);
     const stakeOctas = Number(game?.stake || 0);
     const stakeAptos = stakeOctas / 10 ** 8;
     const maxPotAptos = (Number(game?.pot) || 0) / 10 ** 8;
@@ -96,13 +92,13 @@ function GameRoom({ gameId, onEnterRoom }: GameRoomProps) {
     if (playerCount >= MAX_PLAYER_COUNT) {
       return;
     }
-    await onEnterRoom(gameId);
+    await onEnterRoom(roomId);
   };
 
   return (
-    <Table
+    <GameRoomBadge
       onClick={onClick}
-      title={`Table ${gameId}`}
+      title={`Table ${roomId}`}
       playerCount={playerCount}
       buyin={buyin}
       maxPot={maxPot}
@@ -117,21 +113,22 @@ function Banner() {
   );
 }
 
-interface TableProps extends React.HTMLAttributes<HTMLButtonElement> {
+interface GameRoomBadgeProps extends React.HTMLAttributes<HTMLButtonElement> {
   title: string;
   playerCount: number;
   buyin: number;
   maxPot: number;
   color: "red" | "yellow" | "green";
 }
-function Table({
+
+function GameRoomBadge({
   title,
   playerCount,
   buyin,
   maxPot,
   color,
   onClick,
-}: TableProps) {
+}: GameRoomBadgeProps) {
   let style = "";
   let bgColor = "";
   switch (color) {

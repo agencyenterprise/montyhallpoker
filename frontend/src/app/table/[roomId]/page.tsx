@@ -1,12 +1,48 @@
-import { buttonStyles } from "@/components/WalletButtons";
+"use client";
+
 import classnames from "classnames";
 import Image from "next/image";
 
 import { cn } from "@/utils/styling";
-interface TableProps {
-  players: string[];
-}
-export default function Table({ players }: TableProps) {
+import { useEffect, useState } from "react";
+import { GameState, getGameByRoomId } from "../../../../controller/contract";
+import { Maybe } from "aptos";
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+
+const getAptosWallet = () => {
+  if ("aptos" in window) {
+    return window.aptos;
+  } else {
+    window.open("https://petra.app/", `_blank`);
+  }
+};
+
+export default function PokerGameTable({ params }: { params: any }) {
+  const { roomId } = params;
+  const [loaded, setLoaded] = useState(false);
+  const [me, setMe] = useState(null);
+  const [currentPlayer, setCurrentPlayer] = useState(null);
+  const [playerOne, setPlayerOne] = useState(null);
+  const [playerTwo, setPlayerTwo] = useState(null);
+  const [playerThree, setPlayerThree] = useState(null);
+  const [playerFour, setPlayerFour] = useState(null);
+  const [communityCards, setCommunityCards] = useState([]);
+
+  useEffect(() => {
+    getGameByRoomId(roomId).then(setGameState).catch(console.error);
+  });
+
+  const setGameState = async (game: Maybe<GameState>): Promise<void> => {
+    const wallet = getAptosWallet();
+    try {
+      const account = await wallet?.account();
+      setMe(account.address);
+    } catch (error) {
+      // { code: 4001, message: "User rejected the request."}
+    }
+    setLoaded(true);
+  };
+
   return (
     <div className="h-full w-full flex items-center justify-center relative">
       <div className="relative">
@@ -34,11 +70,9 @@ export default function Table({ players }: TableProps) {
           />
         </div>
         <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
-          <Card valueString="clubs_king" size="small" />
-          <Card valueString="diamonds_ace" size="small" />
-          <Card valueString="diamonds_ace" size="small" />
-          <Card valueString="diamonds_ace" size="small" />
-          <Card valueString="diamonds_ace" size="small" />
+          {communityCards.map((card, index) => (
+            <Card valueString={card} size="large" key={index} />
+          ))}
         </div>
         <div className="absolute -bottom-20 flex gap-x-4">
           <ActionButtons />
