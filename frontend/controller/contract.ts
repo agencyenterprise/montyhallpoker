@@ -4,7 +4,8 @@ type Maybe<T> = T | null;
 
 const client = getAptosClient();
 const CONTRACT_ADDRESS =
-  process.env.CONTRACT_ADDRESS || "0x7436bbe16422c873f3d81bf1668b96ef50f2c6624a851c1a991c92de1b253b29";
+  process.env.CONTRACT_ADDRESS ||
+  "0x7436bbe16422c873f3d81bf1668b96ef50f2c6624a851c1a991c92de1b253b29";
 type LastRaiser = {
   vec: string[];
 };
@@ -62,7 +63,13 @@ export type GameState = {
   winner: string;
 };
 
-export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => {
+export type ChainResponse = {
+  vec: any[];
+};
+
+export const getGameById = async (
+  gameId: number
+): Promise<Maybe<GameState>> => {
   try {
     const game = await client.view({
       payload: {
@@ -76,15 +83,17 @@ export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => 
   }
 };
 
-export const getGameByRoomId = async (roomId: string): Promise<Maybe<GameState>> => {
+export const getGameByRoomId = async (
+  roomId: string
+): Promise<Maybe<GameState>> => {
   try {
-    const game = await client.view({
+    const game = (await client.view({
       payload: {
         function: `${CONTRACT_ADDRESS}::poker_manager::get_last_game_by_room_id`,
         functionArguments: [`${roomId}`],
       },
-    });
-    return !game.length ? null : (game[0] as GameState);
+    })) as ChainResponse[];
+    return !game.length ? null : (game[0]?.vec?.[0] as GameState);
   } catch (err) {
     return null;
   }

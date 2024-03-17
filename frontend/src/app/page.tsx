@@ -1,122 +1,103 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import classnames from "classnames";
 import Image from "next/image";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useRouter } from "next/navigation";
+import { getGameByRoomId } from "../../controller/contract";
+
+export const AVAILABLE_ROOMS = [
+  "1",
+  // "2",
+  // "3",
+  // "4",
+  // "5",
+  // "6",
+  // "7",
+  // "8",
+  // "9",
+  // "10",
+  // "11",
+  // "12",
+];
+
+export const LOW_STAKES = 5000000; // More or less 0.05 APT
+export const MEDIUM_STAKES = 30000000; // More or less 0.3 APT
+export const HIGH_STAKES = 100000000; // More or less 1 APT
 
 export default function Home() {
   const { connected } = useWallet();
   const router = useRouter();
+
   const goToTable = () => {
     router.push("/table");
   };
+
   return (
-    <div>
-      {connected ? 'conected': 'not'}
+    <div className="text-white">
       <Banner />
       <div className="mt-6 w-full p-6 bg-slate-900 flex flex-col gap-6 rounded-[20px]">
         <h1 className="text-white text-2xl">Poker - Sit & Go</h1>
         <div className="grid grid-cols-4 gap-6">
-          <Table
-            onClick={() => goToTable()}
-            title="Table 1"
-            playerCount={2}
-            buyin={20}
-            maxPot={200}
-            color="red"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 1"
-            playerCount={2}
-            buyin={20}
-            maxPot={200}
-            color="red"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 1"
-            playerCount={2}
-            buyin={20}
-            maxPot={200}
-            color="red"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 1"
-            playerCount={2}
-            buyin={20}
-            maxPot={200}
-            color="red"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 2"
-            playerCount={3}
-            buyin={200}
-            maxPot={300}
-            color="yellow"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 2"
-            playerCount={3}
-            buyin={200}
-            maxPot={300}
-            color="yellow"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 2"
-            playerCount={3}
-            buyin={200}
-            maxPot={300}
-            color="yellow"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 2"
-            playerCount={3}
-            buyin={200}
-            maxPot={300}
-            color="yellow"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 3"
-            playerCount={4}
-            buyin={800}
-            maxPot={400}
-            color="green"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 3"
-            playerCount={4}
-            buyin={800}
-            maxPot={400}
-            color="green"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 3"
-            playerCount={4}
-            buyin={800}
-            maxPot={400}
-            color="green"
-          />
-          <Table
-            onClick={() => goToTable()}
-            title="Table 3"
-            playerCount={4}
-            buyin={800}
-            maxPot={400}
-            color="green"
-          />
+          {AVAILABLE_ROOMS.map((room) => {
+            return (
+              <GameRoom
+                key={room}
+                onEnterRoom={() => goToTable()}
+                gameId={room}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
+  );
+}
+
+interface GameRoomProps extends React.HTMLAttributes<HTMLButtonElement> {
+  gameId: string;
+  onEnterRoom: (roomId: string) => void;
+}
+
+function GameRoom({ gameId, onEnterRoom }: GameRoomProps) {
+  const [playerCount, setPlayerCount] = useState(0);
+  const [buyin, setBuyin] = useState(0);
+  const [maxPot, setMaxPot] = useState(0);
+  const [color, setColor] = useState<"red" | "yellow" | "green">("green");
+
+  useEffect(() => {
+    pullRoomData().catch(console.error);
+  });
+  const pullRoomData = async () => {
+    const game = await getGameByRoomId(gameId);
+    const stakeOctas = Number(game?.stake || 0);
+    const stakeAptos = stakeOctas / 10 ** 8;
+    const maxPotAptos = (Number(game?.pot) || 0) / 10 ** 8;
+    setPlayerCount(game?.players.length || 0);
+    setBuyin(stakeAptos);
+    setMaxPot(maxPotAptos);
+    if (stakeOctas <= LOW_STAKES) {
+      setColor("green");
+    }
+    if (stakeOctas > LOW_STAKES && stakeOctas <= MEDIUM_STAKES) {
+      setColor("yellow");
+    }
+    if (stakeOctas > MEDIUM_STAKES) {
+      setColor("red");
+    }
+
+    console.log(game);
+  };
+  return (
+    <Table
+      onClick={() => onEnterRoom(gameId)}
+      title={`Table ${gameId}`}
+      playerCount={playerCount}
+      buyin={buyin}
+      maxPot={maxPot}
+      color={color}
+    />
   );
 }
 
@@ -169,7 +150,7 @@ function Table({
       <div
         className={`cursor-pointer font-bold text-white h-[142px] rounded-[10px] leading-[19px] p-4 flex ${style}`}
       >
-        <div className="flex flex-col gap-y-[10px]">
+        <div className="flex flex-col gap-y-[10px] text-justify">
           <h1>{title}</h1>
           <div className="flex gap-x-[10px]">
             <PlayersIcon />
@@ -177,11 +158,11 @@ function Table({
           </div>
           <div className="flex gap-x-[10px]">
             <BuyinIcon />
-            <p>{buyin}</p>
+            <p>{buyin.toFixed(2)} APT</p>
           </div>
           <div className="flex gap-x-[10px]">
             <MoneyIcon />
-            <p>{maxPot}</p>
+            <p>{maxPot.toFixed(2)} APT</p>
           </div>
         </div>
       </div>
