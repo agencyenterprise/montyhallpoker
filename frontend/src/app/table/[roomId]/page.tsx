@@ -55,6 +55,30 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
     setLoaded(true);
   };
+  const revealCurrentUserCard = async () => {
+    const message = "Sign this to reveal your cards";
+    const nonce = Date.now().toString();
+    const aptosClient = getAptosWallet()
+    const response = await aptosClient.signMessage({
+      message,
+      nonce,
+    });
+    const { publicKey } = await aptosClient.account();
+    const revealPayload = {
+      gameId: gameState!.id,
+      userPubKey: publicKey,
+      userSignedMessage: response,
+    };
+    const res = await fetch(`/api/reveal/private`, {
+      method: "POST",
+      body: JSON.stringify(revealPayload),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await res.json();
+    console.log(data);
+  }
 
   return (
     <div className="h-full w-full flex items-center justify-center relative">
