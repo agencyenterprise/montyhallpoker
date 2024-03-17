@@ -26,6 +26,9 @@ dependencies:
   autoprefixer:
     specifier: 10.4.14
     version: 10.4.14(postcss@8.4.27)
+  axios:
+    specifier: ^1.6.8
+    version: 1.6.8
   classnames:
     specifier: ^2.5.1
     version: 2.5.1
@@ -1663,8 +1666,7 @@ packages:
     dev: false
 
   /classnames@2.5.1:
-    resolution:
-      { integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow== }
+    resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
     dev: false
 
   /client-only@0.0.1:

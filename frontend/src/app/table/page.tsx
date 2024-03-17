@@ -32,36 +32,11 @@ export default function Table({ players }: TableProps) {
           />
         </div>
         <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
-          <Image
-            src="/cards/clubs/king.svg"
-            alt="Card Club"
-            width={61}
-            height={91}
-          />
-          <Image
-            src="/cards/diamonds/ace.svg"
-            alt="Card Club"
-            width={61}
-            height={91}
-          />
-          <Image
-            src="/cards/hearts/4.svg"
-            alt="Card Club"
-            width={61}
-            height={91}
-          />
-          <Image
-            src="/cards/diamonds/6.svg"
-            alt="Card Club"
-            width={61}
-            height={91}
-          />
-          <Image
-            src="/cards/clubs/3.svg"
-            alt="Card Club"
-            width={61}
-            height={91}
-          />
+          <Card valueString="clubs_king" size="small" />
+          <Card valueString="diamonds_ace" size="small" />
+          <Card valueString="diamonds_ace" size="small" />
+          <Card valueString="diamonds_ace" size="small" />
+          <Card valueString="diamonds_ace" size="small" />
         </div>
         <PokerTable />
       </div>
@@ -133,41 +108,62 @@ function Cards({ show }: CardsProps) {
       )}
     >
       <div className="flex relative mx-auto">
-        {!show && (
-          <div>
-            <Image
-              src="/card-back.svg"
-              alt="Card Back"
-              width={61}
-              height={91}
-              className="absolute z-[2]"
-            />
-            <Image
-              src="/card-back.svg"
-              alt="Card Back"
-              width={61}
-              height={91}
-              className="absolute z-[1] left-[30px]"
-            />
-          </div>
-        )}
+        {!show && <BackCards />}
         {show && (
-          <div className="absolute flex gap-x-4 -top-10">
-            <Image
-              src="/cards/clubs/king.svg"
-              alt="Card Club"
-              width={95}
-              height={144}
-            />
-            <Image
-              src="/cards/diamonds/ace.svg"
-              alt="Card Club"
-              width={95}
-              height={144}
-            />
+          <div className="absolute flex gap-x-[10px] -top-10">
+            <Card valueString="clubs_king" size="large" />
+            <Card valueString="diamonds_ace" size="large" />
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function BackCards() {
+  return (
+    <div>
+      <Image
+        src="/card-back.svg"
+        alt="Card Back"
+        width={61}
+        height={91}
+        className="absolute z-[2]"
+      />
+      <Image
+        src="/card-back.svg"
+        alt="Card Back"
+        width={61}
+        height={91}
+        className="absolute z-[1] left-[30px]"
+      />
+    </div>
+  );
+}
+
+function Card({
+  valueString,
+  size,
+}: {
+  valueString: string;
+  size: "small" | "large";
+}) {
+  const width = size === "small" ? 61 : 95;
+  const height = size === "small" ? 91 : 144;
+  return (
+    <div
+      className=" bg-white rounded-[10px] border border-black flex items-center justify-center"
+      style={{
+        width: `${width}px`,
+        height: `${height}px`,
+      }}
+    >
+      <Image
+        src={`/cards/${valueString}.png`}
+        alt="Card Club"
+        width={width}
+        height={height}
+      />
     </div>
   );
 }

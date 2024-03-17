@@ -2,8 +2,10 @@
 
 import { useWallet, WalletReadyState, Wallet, isRedirectable, WalletName } from "@aptos-labs/wallet-adapter-react";
 import { cn } from "@/utils/styling";
+import { HexString, TxnBuilderTypes } from "aptos";
 
-const buttonStyles = "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
+const buttonStyles =
+  "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
 
 export const WalletButtons = () => {
   const { wallets, connected, disconnect, isLoading } = useWallet();
@@ -42,7 +44,8 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
 
       pubKey = new TxnBuilderTypes.Ed25519PublicKey(key);
 
-      const authKey = TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey);
+      const authKey =
+        TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey);
 
       console.log(authKey.derivedAddress().toString());
     } catch (error) {
