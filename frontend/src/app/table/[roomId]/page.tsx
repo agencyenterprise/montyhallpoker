@@ -20,6 +20,11 @@ const getAptosWallet = (): any => {
   }
 };
 
+interface PlayerCards {
+  suit: string;
+  value: string;
+}
+
 export default function PokerGameTable({ params }: { params: any }) {
   const { roomId } = params;
   const [loaded, setLoaded] = useState(false);
@@ -34,6 +39,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [gameStarted, setGameStarted] = useState(false);
   const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
+  const [userCards, setUserCards] = useState<PlayerCards[]>([]);
   const [stop, setStop] = useState(false);
   const controller = new AbortController();
   const gameWorker = async () => {
@@ -89,7 +95,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     const { publicKey } = await aptosClient.account();
 
     const revealPayload = {
-      gameId: gameState!.id,
+      gameId: +gameState!.id,
       userPubKey: publicKey,
       userSignedMessage: {
         message: response.fullMessage,
@@ -104,7 +110,10 @@ export default function PokerGameTable({ params }: { params: any }) {
       },
     });
     const data = await res.json();
-    console.log(data);
+    if (data.message == "OK") {
+      console.log(data);
+      setUserCards(data.userCards);
+    }
   };
 
   return (
@@ -125,7 +134,13 @@ export default function PokerGameTable({ params }: { params: any }) {
           />
         </div>
         <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
-          <PlayerBanner isMe={true} name="Player 3" stack={1000} position={1} />
+          <PlayerBanner
+            isMe={true}
+            name="Player 3"
+            stack={1000}
+            position={1}
+            cards={userCards}
+          />
           <PlayerBanner
             isMe={false}
             name="Player 4"
@@ -195,14 +210,21 @@ interface PlayerBannerProps {
   isMe: boolean;
   name: string;
   stack: number;
+  cards?: PlayerCards[];
   position: number;
 }
-function PlayerBanner({ isMe, name, stack, position }: PlayerBannerProps) {
+function PlayerBanner({
+  isMe,
+  name,
+  stack,
+  cards,
+  position,
+}: PlayerBannerProps) {
   const width = isMe ? "w-[230px]" : "w-[174px]";
 
   return (
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
-      <Cards show={isMe} />
+      <Cards cards={cards} />
       <div
         className={classnames(
           "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
@@ -236,10 +258,10 @@ function PlayerBanner({ isMe, name, stack, position }: PlayerBannerProps) {
 }
 
 interface CardsProps {
-  show: boolean;
+  cards?: PlayerCards[];
 }
-function Cards({ show }: CardsProps) {
-  const cardPosition = show ? "left-4" : `left-10`;
+function Cards({ cards }: CardsProps) {
+  const cardPosition = cards?.length ? "left-4" : `left-10`;
 
   return (
     <div
@@ -249,11 +271,17 @@ function Cards({ show }: CardsProps) {
       )}
     >
       <div className="flex relative mx-auto">
-        {!show && <BackCards />}
-        {show && (
+        {!cards?.length && <BackCards />}
+        {cards?.length && (
           <div className="absolute flex gap-x-[10px] -top-10">
-            <Card valueString="clubs_king" size="large" />
-            <Card valueString="diamonds_ace" size="large" />
+            <Card
+              valueString={`${cards[0].suit}_${cards[0].value}`}
+              size="large"
+            />
+            <Card
+              valueString={`${cards[1].suit}_${cards[1].value}`}
+              size="large"
+            />
           </div>
         )}
       </div>
