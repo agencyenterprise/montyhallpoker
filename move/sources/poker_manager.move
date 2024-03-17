@@ -33,7 +33,40 @@ module poker::poker_manager {
     const MEDIUM_STAKES: u64 = 30000000; // More or less 0.3 APT
     const HIGH_STAKES: u64 = 100000000; // More or less 1 APT
 
-    struct GameMetadata has store, copy, drop {
+
+    const STAGE_PREFLOP: u8 = 0;
+    const STAGE_FLOP: u8 = 1;
+    const STAGE_TURN: u8 = 2;
+    const STAGE_RIVER: u8 = 3;
+    struct Hand has drop, copy {
+        suit: u8,
+        value: u8,
+        suit_string: string::String,
+        value_string: string::String,
+
+    }
+    struct Player has drop, copy {
+        id: address,
+        hand: vector<Hand>,
+
+    }
+    struct LastRaiser has drop, copy {
+        playerIndex: address,
+        move: u32,
+    }
+    struct GameMetadata has drop, copy, store {
+        players: vector<Player>,
+        deck: vector<Hand>,
+        community: vector<Hand>,
+        currentRound: u8,
+        stage: u8,
+        currentPlayerIndex: u8,
+        continueBetting: bool,
+        order: vector<Hand>,
+        move: u32,
+        lastRaiser: Option<LastRaiser>,
+        gameEnded: bool,
+        seed: u64,
         id: u64,
         room_id: u64,
         stake: u64,
@@ -41,7 +74,6 @@ module poker::poker_manager {
         state: u64,
         turn: vector<address>,
         winner: address,
-        players: vector<address>,
     }
 
     struct GameState has key {
