@@ -4,7 +4,11 @@ import classnames from "classnames";
 import Image from "next/image";
 import { cn } from "@/utils/styling";
 import { useEffect, useState } from "react";
-import { GameState, getGameByRoomId } from "../../../../controller/contract";
+import {
+  GameState,
+  GameStatus,
+  getGameByRoomId,
+} from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
 
@@ -26,48 +30,71 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [playerThree, setPlayerThree] = useState(null);
   const [playerFour, setPlayerFour] = useState(null);
   const [communityCards, setCommunityCards] = useState([]);
+  const [currentPot, setCurrentPot] = useState(0);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
-  const [stop, setStop] = useState(false)
+  const [stop, setStop] = useState(false);
   const controller = new AbortController();
   const gameWorker = async () => {
-    const game = await getGameByRoomId(roomId)
-    setGameState(game)
-  }
-  usePollingEffect(
-    async () => await gameWorker(),
-    [],
-    { interval: 2000, stop, controller }
-  )
+    const game = await getGameByRoomId(roomId);
+    setGameState(game);
+    console.log(game);
+  };
+  usePollingEffect(async () => await gameWorker(), [], {
+    interval: 2000,
+    stop,
+    controller,
+  });
   useEffect(() => {
     console.log(gameState);
-  }, [gameState])
+  }, [gameState]);
+
   useEffect(() => {
-    retrieveGameState()
+    retrieveGameState();
   });
+
+  useEffect(() => {
+    if (
+      gameState &&
+      gameState?.state === GameStatus.INPROGRESS &&
+      !handRevealed
+    ) {
+      revealCurrentUserCard();
+      setHandRevealed(true);
+    }
+  }, [gameStarted, gameState]);
 
   const retrieveGameState = async (): Promise<void> => {
     const wallet = getAptosWallet();
     try {
       const account = await wallet?.account();
       setMe(account.address);
+      setGameStarted(true);
+      setCurrentPot(Number(gameState?.pot) / 10 ** 8);
     } catch (error) {
       // { code: 4001, message: "User rejected the request."}
     }
     setLoaded(true);
   };
+
   const revealCurrentUserCard = async () => {
     const message = "Sign this to reveal your cards";
     const nonce = Date.now().toString();
-    const aptosClient = getAptosWallet()
+    const aptosClient = getAptosWallet();
     const response = await aptosClient.signMessage({
       message,
       nonce,
     });
     const { publicKey } = await aptosClient.account();
+
     const revealPayload = {
       gameId: gameState!.id,
       userPubKey: publicKey,
-      userSignedMessage: response,
+      userSignedMessage: {
+        message: response.fullMessage,
+        signedMessage: response.signature,
+      },
     };
     const res = await fetch(`/api/reveal/private`, {
       method: "POST",
@@ -78,7 +105,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     });
     const data = await res.json();
     console.log(data);
-  }
+  };
 
   return (
     <div className="h-full w-full flex items-center justify-center relative">
@@ -113,6 +140,9 @@ export default function PokerGameTable({ params }: { params: any }) {
         </div>
         <div className="absolute -bottom-20 flex gap-x-4">
           <ActionButtons />
+        </div>
+        <div className="absolute right-40 h-full flex justify-center items-center text-white">
+          Pot: {currentPot.toFixed(2)}
         </div>
         <PokerTable />
       </div>

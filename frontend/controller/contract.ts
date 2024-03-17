@@ -31,9 +31,9 @@ export enum GameStage {
   Showdown = 4,
 }
 export enum GameStatus {
-  OPEN = 0,
-  INPROGRESS = 1,
-  CLOSE = 2,
+  OPEN = "0",
+  INPROGRESS = "1",
+  CLOSE = "2",
 }
 type Player = {
   current_bet: string;
