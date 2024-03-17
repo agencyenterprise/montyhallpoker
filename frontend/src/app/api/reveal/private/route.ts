@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     );
     return NextResponse.json({ message: "OK", userCards });
   } catch (err) {
-    NextResponse.json({
+    return NextResponse.json({
       message: err instanceof Error ? err.message : "Application has crashed",
       userCards: [],
     });

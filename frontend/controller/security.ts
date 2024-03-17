@@ -21,6 +21,8 @@ export const verifySignature = async (pubKey: string, message: string, signedMes
     return nacl.sign.detached.verify(
         new TextEncoder().encode(message),
         new HexString(signedMessage).toUint8Array(),
-        new HexString(pubKey).toUint8Array(),
-      );
+        new HexString(pubKey.slice(2, 66)).toUint8Array(),
+    );
+
+
 }
