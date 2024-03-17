@@ -446,6 +446,16 @@ module poker::poker_manager {
             card.value_string = *vector::borrow(&value_strings, i);
             i = i + 1;
         };
+
+        // Find winner and end game
+        let winner = get_game_winner(game_metadata);
+        winner(winner.player_index);
+
+        game_metadata.state = GAMESTATE_CLOSED;
+
+        // Transfer pot to winner
+        let winner_addr = vector::borrow(&game_metadata.players, winner.player_index).id;
+        aptos_account::transfer(@poker, winner_addr, game_metadata.pot);
     }
 
     public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
@@ -459,6 +469,13 @@ module poker::poker_manager {
 
         let (is_player_in_game, player_index) = find_player_by_address(&game_metadata.players, &addr);
         assert!(is_player_in_game, ENOT_IN_GAME);
+
+        if (game_metadata.state == GAMESTATE_IN_PROGRESS) {
+            let player = vector::borrow(&game_metadata.players, player_index);
+            if (player.status == STATUS_ACTIVE) {
+                player.status = STATUS_FOLDED;
+            }
+        }
 
         vector::remove(&mut game_metadata.players, player_index);
 

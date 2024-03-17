@@ -3,15 +3,17 @@ import { getAptosClient } from "../src/utils/aptosClient";
 type Maybe<T> = T | null;
 
 const client = getAptosClient();
-const CONTRACT_ADDRESS =
-  process.env.CONTRACT_ADDRESS || "0x7436bbe16422c873f3d81bf1668b96ef50f2c6624a851c1a991c92de1b253b29";
+export const CONTRACT_ADDRESS =
+  process.env.CONTRACT_ADDRESS ||
+  "0xe4ab044df91caf41e1b13ea1a2d57a72f5d9a3b8edb52755046e3f5d3d3082d7";
 type LastRaiser = {
   vec: string[];
 };
 export type DeckCard = {
-  suit: number;
+  cardId: number;
+  suit?: number;
+  value?: number;
   suit_string?: string;
-  value: number;
   value_string?: string;
 };
 
@@ -62,7 +64,13 @@ export type GameState = {
   winner: string;
 };
 
-export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => {
+export type ChainResponse = {
+  vec: any[];
+};
+
+export const getGameById = async (
+  gameId: number
+): Promise<Maybe<GameState>> => {
   try {
     const game = await client.view({
       payload: {
@@ -76,15 +84,33 @@ export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => 
   }
 };
 
-export const getGameByRoomId = async (roomId: string): Promise<Maybe<GameState>> => {
+export const createGameForRoom = async (
+  roomId: string
+): Promise<Maybe<GameState>> => {
   try {
-    const game = await client.view({
+    const game = (await client.view({
       payload: {
         function: `${CONTRACT_ADDRESS}::poker_manager::get_last_game_by_room_id`,
         functionArguments: [`${roomId}`],
       },
-    });
-    return !game.length ? null : (game[0] as GameState);
+    })) as ChainResponse[];
+    return !game.length ? null : (game[0]?.vec?.[0] as GameState);
+  } catch (err) {
+    return null;
+  }
+};
+
+export const getGameByRoomId = async (
+  roomId: string
+): Promise<Maybe<GameState>> => {
+  try {
+    const game = (await client.view({
+      payload: {
+        function: `${CONTRACT_ADDRESS}::poker_manager::get_last_game_by_room_id`,
+        functionArguments: [`${roomId}`],
+      },
+    })) as ChainResponse[];
+    return !game.length ? null : (game[0]?.vec?.[0] as GameState);
   } catch (err) {
     return null;
   }
