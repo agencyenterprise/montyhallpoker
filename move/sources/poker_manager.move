@@ -9,8 +9,12 @@ module poker::poker_manager {
     use std::option;
     use aptos_framework::randomness;
     use aptos_framework::timestamp;
+    use aptos_std::fixed_point64;
     use std::simple_map::{SimpleMap,Self};
     use std::debug;
+    use std::string;
+
+    const U64_MAX: u64 = 18446744073709551615;
 
     /// Error codes
     const EINVALID_MOVE: u64 = 0;
@@ -26,6 +30,7 @@ module poker::poker_manager {
     const EINSUFFICIENT_BALANCE_FOR_STAKE: u64 = 10;
     const ENOT_IN_GAME: u64 = 11;
     const EINVALID_CARD: u64 = 12;
+    const ERAISE_TOO_LOW: u64 = 13;
 
     // Game states
     const GAMESTATE_OPEN: u64 = 0;
@@ -75,8 +80,8 @@ module poker::poker_manager {
     }
 
     struct LastRaiser has drop, copy, store {
-        playerIndex: address,
-        playerMove: u32,
+        playerId: address,
+        playerMove: u64,
     }
     
     struct GameMetadata has drop, copy, store {
@@ -215,6 +220,19 @@ module poker::poker_manager {
             current_bet: 0,
         }
     }
+    
+    fun all_have_called_or_are_all_in(players: &vector<Player>, current_bet: u64): bool {
+        let len = vector::length(players);
+        let i = 0;
+        while (i < len) {
+            let player = vector::borrow(players, i);
+            if (player.status == STATUS_ACTIVE && player.current_bet < current_bet) {
+                return false
+            };
+            i = i + 1;
+        };
+        return true
+    }
 
     // Initialize the game state and add the game to the global state
     fun init_module(acc: &signer) {
@@ -295,6 +313,7 @@ module poker::poker_manager {
         game_metadata.current_bet = 0;
         game_metadata.last_action_timestamp = timestamp::now_seconds();
         initializeDeck(game_metadata);
+        dealHoleCards(game_metadata);
     }
 
     fun winner(winner_address: address) acquires GameState {
@@ -307,6 +326,8 @@ module poker::poker_manager {
 
     public fun move_to_next_stage(game_id: u64) acquires GameState {
         assert_is_initialized();
+
+        debug::print(&string::utf8(b"Moving to next stage"));
 
         let gamestate = borrow_global_mut<GameState>(@poker);
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
@@ -325,11 +346,14 @@ module poker::poker_manager {
             dealCommunityCards(game_metadata, 1);
         } else if (game_metadata.stage == STAGE_RIVER) {
             let winner = get_game_winner(game_metadata);
+            game_metadata.stage = STAGE_SHOWDOWN;
             game_metadata.winner = vector::borrow(&game_metadata.players, (winner.player_index as u64)).id;
             game_metadata.state = GAMESTATE_CLOSED;
         };
 
         game_metadata.stage = (game_metadata.stage + 1) % 5;
+        debug::print(&string::utf8(b"Stage: "));
+        debug::print(&game_metadata.stage);
         game_metadata.currentPlayerIndex = game_metadata.starter;
         game_metadata.turn = vector::borrow(&game_metadata.players, (game_metadata.starter as u64)).id;
         game_metadata.current_bet = 0;
@@ -355,6 +379,7 @@ module poker::poker_manager {
         let addr = signer::address_of(acc);
         assert_is_initialized();
 
+        assert!(room_id > 0 && room_id <= 12, EINVALID_GAME);
         // check if room_id's last game is closed
         let last_game = get_last_game_by_room_id(room_id);
         if (option::is_some(&last_game)) {
@@ -450,22 +475,44 @@ module poker::poker_manager {
 
         let player = vector::borrow_mut(&mut game_metadata.players, player_index);
 
+        debug::print(&string::utf8(b"Player index: "));
+        debug::print(&player_index);
+        debug::print(&string::utf8(b"Action: "));
+        debug::print(&action);
+        debug::print(&string::utf8(b"Amount: "));
+        debug::print(&amount);
+
         assert!(game_metadata.turn == addr, EINSUFFICIENT_PERMISSIONS);
+
+        // Check if player has enough balance to perform the action
+        if (amount > 0) {
+            assert!(amount <= coin::balance<AptosCoin>(addr), EINSUFFICIENT_BALANCE);
+        };
 
         if (action == FOLD) {
             player.status = STATUS_FOLDED;
         } else if (action == CHECK) {
-            // Do nothing
+            assert!(game_metadata.current_bet == 0, EINVALID_MOVE);
         } else if (action == CALL) {
+            // assert that attempted bet is equal to the current bet and it's not 0
+            assert!(amount > 0, EINVALID_MOVE);
+            assert!(game_metadata.current_bet == amount, EINVALID_MOVE);
             let diff = game_metadata.current_bet - player.current_bet;
             assert!(diff <= amount, EINVALID_MOVE);
             player.current_bet = player.current_bet + diff;
             game_metadata.pot = game_metadata.pot + diff;
         } else if (action == RAISE) {
             assert!(amount > game_metadata.current_bet, EINVALID_MOVE);
+            // Raise has to be at least 1.5x the current bet
+            // TODO: Change minimum to be previous bet or raise + difference between previous bet or raise and its preceding bet or raise
+            debug::print(&fixed_point64::multiply_u128((game_metadata.current_bet as u128), fixed_point64::create_from_rational(3, 2)));
+            assert!(amount >= (fixed_point64::multiply_u128((game_metadata.current_bet as u128), fixed_point64::create_from_rational(3, 2)) as u64), ERAISE_TOO_LOW);
             player.current_bet = player.current_bet + amount;
             game_metadata.pot = game_metadata.pot + amount;
             game_metadata.current_bet = amount;
+            game_metadata.lastRaiser = option::some<LastRaiser>(LastRaiser{playerId: addr, playerMove: action});
+            debug::print(&string::utf8(b"JUST SET Last raiser to: "));
+            debug::print(&game_metadata.lastRaiser);
         } else if (action == ALL_IN) {
             player.current_bet = player.current_bet + amount;
             game_metadata.pot = game_metadata.pot + amount;
@@ -479,26 +526,57 @@ module poker::poker_manager {
         game_metadata.turn = nextPlayer.id;
         game_metadata.currentPlayerIndex = ((player_index + 1) % vector::length(&game_metadata.players) as u8);
         
-        // Check if we can move to the next stage
         let activePlayers = 0;
         let lastActivePlayerIndex = 0;
-        let lastActivePlayerBet = 0;
         let i = 0;
         while (i < vector::length(&game_metadata.players)) {
             let player = vector::borrow(&game_metadata.players, i);
-            if (player.status == STATUS_ACTIVE) {
+            if (player.status == STATUS_ACTIVE && timestamp::now_seconds() - game_metadata.last_action_timestamp < 120) {
                 activePlayers = activePlayers + 1;
                 lastActivePlayerIndex = i;
-                lastActivePlayerBet = player.current_bet;
             };
             i = i + 1;
         };
+
         if (activePlayers == 1) {
             game_metadata.winner = vector::borrow(&game_metadata.players, (lastActivePlayerIndex as u64)).id;
             game_metadata.state = GAMESTATE_CLOSED;
         } else if (activePlayers == 0) {
             game_metadata.state = GAMESTATE_CLOSED;
-        } else if (activePlayers > 1 && game_metadata.currentPlayerIndex == (lastActivePlayerIndex as u8) && lastActivePlayerBet == game_metadata.current_bet) {
+        };
+
+        let should_move_to_next_stage = false;
+        
+        debug::print(&string::utf8(b"Current player index: "));
+        debug::print(&game_metadata.currentPlayerIndex);
+        debug::print(&string::utf8(b"Current bet: "));
+        debug::print(&game_metadata.current_bet);
+        debug::print(&string::utf8(b"Starter: "));
+        debug::print(&game_metadata.starter);
+        // If it's the starter's turn and all players have called or are all in, move to next stage
+        if (game_metadata.currentPlayerIndex == game_metadata.starter) {
+            if (all_have_called_or_are_all_in(&game_metadata.players, game_metadata.current_bet)) {
+                should_move_to_next_stage = true;
+            };
+        };
+
+        // If it's the turn of the last raiser and all players have called or are all in, move to next stage
+        debug::print(&string::utf8(b"Last raiser: "));
+        if (option::is_some(&game_metadata.lastRaiser)) {
+            let lastRaiser = option::borrow(&game_metadata.lastRaiser);
+            debug::print(lastRaiser);
+            // lastRaiser will be next player
+            let addrNextPlayer = vector::borrow(&game_metadata.players, (game_metadata.currentPlayerIndex as u64)).id;
+            if (lastRaiser.playerId == addrNextPlayer && all_have_called_or_are_all_in(&game_metadata.players, game_metadata.current_bet)) {
+                should_move_to_next_stage = true;
+            };
+        } else {
+            debug::print(&string::utf8(b"No last raiser"));
+        };
+
+        debug::print(&string::utf8(b"Should move to next stage: "));
+        debug::print(&should_move_to_next_stage);
+        if (should_move_to_next_stage) {
             move_to_next_stage(game_id);
         };
     }
@@ -581,6 +659,7 @@ module poker::poker_manager {
         let suits = simple_map::new<vector<u8>, u8>();
         let values = simple_map::new<u8, u8>();
         let i = 0;
+
         while (i < vector::length(cards)) {
             let card = vector::borrow(cards, i);
             let suit = card.suit_string;
@@ -592,7 +671,7 @@ module poker::poker_manager {
                 let suitCount = simple_map::borrow<vector<u8>, u8>(&suits, &suit);
                 simple_map::upsert(&mut suits, copy suit, *suitCount + 1);
             };
-
+            
             let (hasIndex, valueIndex) = vector::index_of<vector<u8>>(&CARD_HIERARCHY, &value);
 
             assert!(hasIndex, EINVALID_CARD);
@@ -778,7 +857,7 @@ module poker::poker_manager {
         let game_id = 1;
 
         {
-            let pre_game = get_game_by_id(game_id);
+            let pre_game = get_game_metadata_by_id(game_id);
             assert!(pre_game.state == GAMESTATE_OPEN, 0);
             assert!(vector::length(&pre_game.players) == 0, 0);
             assert!(vector::length(&pre_game.community) == 0, 0);
@@ -790,14 +869,115 @@ module poker::poker_manager {
         join_game(account3, 1, 7000000);
         join_game(account4, 1, 8000000);
 
-        let game_metadata = get_game_by_id(game_id);
+        let game_metadata = get_game_metadata_by_id(game_id);
 
-        debug::print(&game_metadata);
+        //debug::print(&game_metadata);
 
         // Make sure the game is in the global state and has the correct number of players
-        assert!(game_metadata.id == copy game_id, 0);
-        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, 0);
-        assert!(vector::length(&game_metadata.players) == 4, 0);
+        assert!(game_metadata.id == copy game_id, EINVALID_GAME);
+        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, EINVALID_GAME);
+        assert!(game_metadata.stage == STAGE_PREFLOP, EINVALID_GAME);
+        assert!(vector::length(&game_metadata.players) == 4, EINVALID_GAME);
+        assert!(vector::length(&game_metadata.community) == 0, EINVALID_GAME);
+
+        {
+            // Assert each player has 2 cards
+            let player1 = vector::borrow(&game_metadata.players, 0);
+            let player2 = vector::borrow(&game_metadata.players, 1);
+            let player3 = vector::borrow(&game_metadata.players, 2);
+            let player4 = vector::borrow(&game_metadata.players, 3);
+            assert!(vector::length(&player1.hand) == 2, EINVALID_GAME);
+            assert!(vector::length(&player2.hand) == 2, EINVALID_GAME);
+            assert!(vector::length(&player3.hand) == 2, EINVALID_GAME);
+            assert!(vector::length(&player4.hand) == 2, EINVALID_GAME);
+        };
+
+        // Actions
+        {
+            perform_action(account4, game_id, RAISE, 8000000);
+            perform_action(account1, game_id, CALL, 8000000);
+            perform_action(account2, game_id, CALL, 8000000);
+            perform_action(account3, game_id, CALL, 8000000);
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_FLOP, EINVALID_GAME);
+        };
+
+        {
+            let gamestate = borrow_global_mut<GameState>(@poker);
+            let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+
+            game_metadata.community = vector[
+                Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"},
+                Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"},
+                Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"},
+            ];
+
+            let num_players = vector::length(&game_metadata.players);
+            let i = 0;
+            while (i < num_players) {
+                let player = vector::borrow_mut(&mut game_metadata.players, i);
+
+                // Instead of a match statement, use if-else to update player hands based on the index
+                if (i == 0) {
+                    player.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"}];
+                } else if (i == 1) {
+                    player.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"2"}];
+                } else if (i == 2) {
+                    player.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"clubs", value_string: b"10"}];
+                } else if (i == 3) {
+                    player.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+                };
+                // Add more conditions as necessary for other players
+
+                i = i + 1;
+            };
+            
+        };
+
+        {
+            perform_action(account4, game_id, RAISE, 8000000);
+            perform_action(account1, game_id, RAISE, 12000000);
+            perform_action(account2, game_id, CALL, 12000000);
+            perform_action(account3, game_id, RAISE, 16000000);
+            perform_action(account4, game_id, CALL, 16000000);
+            perform_action(account1, game_id, CALL, 16000000);
+            perform_action(account2, game_id, CALL, 16000000);
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_TURN, EINVALID_GAME);
+            assert!(vector::length(&game_metadata.community) == 4, EINVALID_GAME);
+        };
+
+        {
+            perform_action(account4, game_id, CHECK, 0);
+            perform_action(account1, game_id, CHECK, 0);
+            perform_action(account2, game_id, CHECK, 0);
+            perform_action(account3, game_id, RAISE, 1000);
+            perform_action(account4, game_id, CALL, 1000);
+            perform_action(account1, game_id, CALL, 1000);
+            perform_action(account2, game_id, CALL, 1000);
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_RIVER, EINVALID_GAME);
+            assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
+        };
+
+        /* {
+            perform_action(account4, game_id, RAISE, 3000);
+            perform_action(account1, game_id, RAISE, 4000);
+            perform_action(account2, game_id, CALL, 4000);
+            perform_action(account3, game_id, CALL, 4000);
+            perform_action(account4, game_id, CALL, 4000);
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_SHOWDOWN, EINVALID_GAME);
+            assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
+        }; */
 
         let user1_games = borrow_global<UserGames>(signer::address_of(account1));
         let user2_games = borrow_global<UserGames>(signer::address_of(account2));
@@ -805,10 +985,10 @@ module poker::poker_manager {
         let user4_games = borrow_global<UserGames>(signer::address_of(account4));
 
         // Make sure the users have the game in their list of games
-        assert!(vector::length(&user1_games.games) == 1, 0);
-        assert!(vector::length(&user2_games.games) == 1, 0);
-        assert!(vector::length(&user3_games.games) == 1, 0);
-        assert!(vector::length(&user4_games.games) == 1, 0);
+        assert!(vector::length(&user1_games.games) == 1, EINVALID_GAME);
+        assert!(vector::length(&user2_games.games) == 1, EINVALID_GAME);
+        assert!(vector::length(&user3_games.games) == 1, EINVALID_GAME);
+        assert!(vector::length(&user4_games.games) == 1, EINVALID_GAME);
 
         coin::destroy_burn_cap(burn_cap);
         coin::destroy_mint_cap(mint_cap);
@@ -847,7 +1027,6 @@ module poker::poker_manager {
             ]
         );
         
-
         let player1 = create_player(@0x1, vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"}]);
         let player2 = create_player(@0x2, vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"6"}]);
         let player3 = create_player(@0x3, vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"9"}]);

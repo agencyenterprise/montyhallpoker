@@ -4,5 +4,5 @@ set -e
 
 echo "##### Restarting server #####"
 
-yes | aptos node run-local-testnet --force-restart --with-indexer-api
+yes | aptos node run-local-testnet --force-restart
 ```
