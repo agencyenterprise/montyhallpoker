@@ -1,26 +1,29 @@
 "use client";
 
+import { getAptosClient } from "@/utils/aptosClient";
 import { useEffect, useState } from "react";
 import classnames from "classnames";
 import Image from "next/image";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useRouter } from "next/navigation";
-import { getGameByRoomId } from "../../controller/contract";
+import { CONTRACT_ADDRESS, getGameByRoomId } from "../../controller/contract";
 
 export const AVAILABLE_ROOMS = [
   "1",
-  // "2",
-  // "3",
-  // "4",
-  // "5",
-  // "6",
-  // "7",
-  // "8",
-  // "9",
-  // "10",
-  // "11",
-  // "12",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "11",
+  "12",
 ];
+
+const aptosClient = getAptosClient();
 
 export const MAX_PLAYER_COUNT = 4;
 export const LOW_STAKES = 5000000; // More or less 0.05 APT
@@ -52,29 +55,67 @@ export default function Home() {
   );
 }
 
+const getAptosWallet = (): any => {
+  if ("aptos" in window) {
+    return window.aptos;
+  } else {
+    window.open("https://petra.app/", `_blank`);
+  }
+};
 interface GameRoomProps extends React.HTMLAttributes<HTMLButtonElement> {
   roomId: string;
   onEnterRoom: (roomId: string) => void;
 }
 
 function GameRoom({ roomId, onEnterRoom }: GameRoomProps) {
+  const { signAndSubmitTransaction } = useWallet();
   const [playerCount, setPlayerCount] = useState(0);
+  const [buyinOctas, setBuyinOctas] = useState(0);
   const [buyin, setBuyin] = useState(0);
   const [maxPot, setMaxPot] = useState(0);
   const [color, setColor] = useState<"red" | "yellow" | "green">("green");
+  const [currentGameId, setCurrentGameId] = useState("");
 
   useEffect(() => {
     pullRoomData().catch(console.error);
   });
+
+  const joinGame = async () => {
+    if (playerCount >= MAX_PLAYER_COUNT) {
+      return;
+    }
+
+    try {
+      const wallet = getAptosWallet();
+      const account = await wallet?.account();
+      const response = await signAndSubmitTransaction({
+        sender: account.address,
+
+        data: {
+          function: `${CONTRACT_ADDRESS}::poker_manager::join_game`,
+          typeArguments: [],
+          functionArguments: [`${currentGameId}`, `${buyinOctas}`],
+        },
+      });
+      await aptosClient.waitForTransaction({
+        transactionHash: response.hash,
+      });
+      await onEnterRoom(roomId);
+    } catch (error: any) {
+      console.error(error);
+    }
+  };
 
   const pullRoomData = async () => {
     const game = await getGameByRoomId(roomId);
     const stakeOctas = Number(game?.stake || 0);
     const stakeAptos = stakeOctas / 10 ** 8;
     const maxPotAptos = (Number(game?.pot) || 0) / 10 ** 8;
+    setBuyinOctas(stakeOctas);
     setPlayerCount(game?.players.length || 0);
     setBuyin(stakeAptos);
     setMaxPot(maxPotAptos);
+    setCurrentGameId(game?.id || "");
     if (stakeOctas <= LOW_STAKES) {
       setColor("green");
     }
@@ -88,16 +129,9 @@ function GameRoom({ roomId, onEnterRoom }: GameRoomProps) {
     console.log(game);
   };
 
-  const onClick = async () => {
-    if (playerCount >= MAX_PLAYER_COUNT) {
-      return;
-    }
-    await onEnterRoom(roomId);
-  };
-
   return (
     <GameRoomBadge
-      onClick={onClick}
+      onClick={joinGame}
       title={`Table ${roomId}`}
       playerCount={playerCount}
       buyin={buyin}
