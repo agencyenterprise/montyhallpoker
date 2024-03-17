@@ -6,6 +6,7 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Connected } from "@/components/Home/Connected";
 import { NotConnected } from "@/components/Home/NotConnected";
 import { WalletButtons } from "@/components/WalletButtons";
+import { Listeners } from "../components/Listeners";
 
 const FixedSizeWrapper = ({ children }: PropsWithChildren) => {
   const fixedStyle = {
@@ -35,6 +36,7 @@ export default function Home() {
     <main className="flex flex-col">
       <FixedSizeWrapper>
         <Header />
+        {connected && <Listeners />}
         {connected ? <Connected /> : <NotConnected />}
       </FixedSizeWrapper>
     </main>

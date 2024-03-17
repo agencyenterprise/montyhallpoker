@@ -1,4 +1,4 @@
-const readlineSync = require('readline-sync');
+const readlineSync = require('/Users/jessica/.nvm/versions/node/v18.16.1/lib/node_modules/readline-sync');
 const fs = require('fs');
 const gameStateFile = 'gameState.json';
 function saveGameState(gameState) {
@@ -107,7 +107,7 @@ function dealHoleCards(gameState) {
     return gameState;
 }
 
-
+const seed = Math.floor(Math.random() * 52);
 function dealCommunityCards(number) {
     // Ensure the function doesn't attempt to deal more cards than what remains in the deck
     if (number > gameState.deck.length) {
@@ -117,7 +117,7 @@ function dealCommunityCards(number) {
 
     for (let i = 0; i < number; i++) {
         // Remove the top card from the deck and add it to the community cards
-        const card = gameState.deck.pop(); // Takes the last card from the deck
+        const card = gameState.deck.pop((i + seed) % 52); // Takes the last card from the deck
         gameState.communityCards.push(card); // Adds it to the community cards
     }
 }
@@ -160,6 +160,7 @@ function evaluateHandDetails(cardsArr) {
         else suits[card.suit]++;
 
         let valueIndex = cardHeirarchy.indexOf(card.value);
+
         if (!values[valueIndex]) values[valueIndex] = 1;
         else values[valueIndex]++;
 
@@ -168,8 +169,8 @@ function evaluateHandDetails(cardsArr) {
 
     flush = Object.values(suits).some(count => count >= 5);
     let consecutive = 0;
-    for (let i = 0; i < cardHeirarchy.length; i++) {
-        consecutive = values[i] ? consecutive + 1 : 0;
+    for (let i = 0; i < 13; i++) {
+        consecutive = values[i] && values[12] || values[i] ? consecutive + 1 : 0;
         if (consecutive >= 5) straight = true;
     }
 
