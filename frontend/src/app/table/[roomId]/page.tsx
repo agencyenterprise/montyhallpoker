@@ -2,14 +2,13 @@
 
 import classnames from "classnames";
 import Image from "next/image";
-
 import { cn } from "@/utils/styling";
 import { useEffect, useState } from "react";
 import { GameState, getGameByRoomId } from "../../../../controller/contract";
 import { Maybe } from "aptos";
-import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { usePollingEffect } from "@/hooks/usePoolingEffect";
 
-const getAptosWallet = () => {
+const getAptosWallet = (): any => {
   if ("aptos" in window) {
     return window.aptos;
   } else {
@@ -27,12 +26,26 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [playerThree, setPlayerThree] = useState(null);
   const [playerFour, setPlayerFour] = useState(null);
   const [communityCards, setCommunityCards] = useState([]);
-
+  const [gameState, setGameState] = useState<Maybe<GameState>>();
+  const [stop, setStop] = useState(false)
+  const controller = new AbortController();
+  const gameWorker = async () => {
+    const game = await getGameByRoomId(roomId)
+    setGameState(game)
+  }
+  usePollingEffect(
+    async () => await gameWorker(),
+    [],
+    { interval: 2000, stop, controller }
+  )
   useEffect(() => {
-    getGameByRoomId(roomId).then(setGameState).catch(console.error);
+    console.log(gameState);
+  }, [gameState])
+  useEffect(() => {
+    retrieveGameState()
   });
 
-  const setGameState = async (game: Maybe<GameState>): Promise<void> => {
+  const retrieveGameState = async (): Promise<void> => {
     const wallet = getAptosWallet();
     try {
       const account = await wallet?.account();
