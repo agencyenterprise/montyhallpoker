@@ -5,7 +5,7 @@ set -e
 echo "##### Running module function #####"
 
 aptos move run \
-  --function-id '0x2c48a1afc19e2fc88c85d28f7449c9fa6ff22ab7165553fcf50ca32d007366fe::poker_manager::perform_action' \
+  --function-id '0x2c48a1afc19e2fc88c85d28f7449c9fa6ff22ab7165553fcf50ca32d007366fe::poker_manager::join_game' \
   --profile local1 \
   --assume-yes \
   --args u64:1 u64:5000012
@@ -18,13 +18,13 @@ aptos move run \
 
 aptos move run \
   --function-id '0x2c48a1afc19e2fc88c85d28f7449c9fa6ff22ab7165553fcf50ca32d007366fe::poker_manager::join_game' \
-  --profile testlolo51 \
+  --profile local3 \
   --assume-yes \
   --args u64:1 u64:5000012
 
 aptos move run \
   --function-id '0x2c48a1afc19e2fc88c85d28f7449c9fa6ff22ab7165553fcf50ca32d007366fe::poker_manager::join_game' \
-  --profile testlolo52 \
+  --profile local4 \
   --assume-yes \
   --args u64:1 u64:5000012
   

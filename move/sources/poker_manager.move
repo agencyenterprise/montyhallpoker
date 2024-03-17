@@ -23,7 +23,7 @@ module poker::poker_manager {
     const EALREADY_INITIALIZED: u64 = 3;
     const ENOT_INITIALIZED: u64 = 4;
     const EINSUFFICIENT_PERMISSIONS: u64 = 5;
-    const EGAME_ALREADY_STARTED: u64 = 6;
+    const EGAME_NOT_OPEN: u64 = 6;
     const ETABLE_IS_FULL: u64 = 7;
     const EALREADY_IN_GAME: u64 = 8;
     const EGAME_NOT_READY: u64 = 9;
@@ -66,8 +66,7 @@ module poker::poker_manager {
 
     // Structs
     struct Card has drop, copy, store {
-        suit: u8,
-        value: u8,
+        cardId: u8,
         suit_string: vector<u8>,
         value_string: vector<u8>,
     }
@@ -344,11 +343,6 @@ module poker::poker_manager {
             dealCommunityCards(game_metadata, 1);
         } else if (game_metadata.stage == STAGE_TURN) {
             dealCommunityCards(game_metadata, 1);
-        } else if (game_metadata.stage == STAGE_RIVER) {
-            let winner = get_game_winner(game_metadata);
-            game_metadata.stage = STAGE_SHOWDOWN;
-            game_metadata.winner = vector::borrow(&game_metadata.players, (winner.player_index as u64)).id;
-            game_metadata.state = GAMESTATE_CLOSED;
         };
 
         game_metadata.stage = (game_metadata.stage + 1) % 5;
@@ -414,7 +408,7 @@ module poker::poker_manager {
 
         assert!(vector::length(&game_metadata.players) < 4, ETABLE_IS_FULL);
 
-        assert!(game_metadata.state == GAMESTATE_OPEN, EGAME_ALREADY_STARTED);
+        assert!(game_metadata.state == GAMESTATE_OPEN, EGAME_NOT_OPEN);
 
         assert!(amount >= game_metadata.stake, EINSUFFICIENT_BALANCE_FOR_STAKE);
         
@@ -434,6 +428,23 @@ module poker::poker_manager {
 
         if (vector::length(&game_metadata.players) == 4) {
             start_game(game_id);
+        };
+    }
+
+    public entry fun populate_card_values(game_id: u64, suit_strings: vector<vector<u8>>, value_strings: vector<vector<u8>>) acquires GameState {
+        assert_is_initialized();
+
+        let gamestate = borrow_global_mut<GameState>(@poker);
+        assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
+
+        let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+
+        let i = 0;
+        while (i < 52) {
+            let card = vector::borrow_mut(&mut game_metadata.deck, i);
+            card.suit_string = *vector::borrow(&suit_strings, i);
+            card.value_string = *vector::borrow(&value_strings, i);
+            i = i + 1;
         };
     }
 
@@ -598,23 +609,16 @@ module poker::poker_manager {
     }
 
     fun initializeDeck(game: &mut GameMetadata) {
-        let suits: vector<u8> = vector[0, 1, 2, 3]; // 0 = hearts, 1 = diamonds, 2 = clubs, 3 = spades
-        let values: vector<u8> = vector[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
-
+        
+        // Gamedeck will be a vector of 52 cards, with ids from 0 to 51
+        // value_string and suit_string will not be used for now, only when evaluating winner
         let i = 0;
-        while (i < vector::length(&suits)) {
-            let suit = vector::borrow(&suits, i);
-            let j = 0;
-            while (j < vector::length(&values)) {
-                let value = vector::borrow(&values, j);
-                vector::push_back(&mut game.deck, Card {
-                    suit: *suit,
-                    value: *value,
+        while (i < 52) {
+            vector::push_back(&mut game.deck, Card {
+                    cardId: i,
                     suit_string: b"",
                     value_string: b""
                 });
-                j = j + 1;
-            };
             i = i + 1;
         };
 
@@ -672,6 +676,13 @@ module poker::poker_manager {
             };
             
             let (hasIndex, valueIndex) = vector::index_of<vector<u8>>(&CARD_HIERARCHY, &value);
+
+            if (!hasIndex) {
+                debug::print(&string::utf8(b"Invalid card: "));
+                debug::print(&value);
+                debug::print(&string::utf8(b"Cards: "));
+                debug::print(cards);
+            };
 
             assert!(hasIndex, EINVALID_CARD);
 
@@ -907,12 +918,6 @@ module poker::poker_manager {
             let gamestate = borrow_global_mut<GameState>(@poker);
             let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
-            game_metadata.community = vector[
-                Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"},
-                Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"},
-                Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"},
-            ];
-
             let num_players = vector::length(&game_metadata.players);
             let i = 0;
             while (i < num_players) {
@@ -920,13 +925,13 @@ module poker::poker_manager {
 
                 // Instead of a match statement, use if-else to update player hands based on the index
                 if (i == 0) {
-                    player.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"}];
+                    player.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}];
                 } else if (i == 1) {
-                    player.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"2"}];
+                    player.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}, Card{cardId: 3, suit_string: b"spades", value_string: b"2"}];
                 } else if (i == 2) {
-                    player.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"clubs", value_string: b"10"}];
+                    player.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"clubs", value_string: b"10"}];
                 } else if (i == 3) {
-                    player.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+                    player.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
                 };
                 // Add more conditions as necessary for other players
 
@@ -965,18 +970,30 @@ module poker::poker_manager {
             assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
         };
 
-        /* {
-            perform_action(account4, game_id, RAISE, 3000);
-            perform_action(account1, game_id, RAISE, 4000);
-            perform_action(account2, game_id, CALL, 4000);
-            perform_action(account3, game_id, CALL, 4000);
-            perform_action(account4, game_id, CALL, 4000);
+        {
+            perform_action(account4, game_id, RAISE, 5000000);
+            perform_action(account1, game_id, RAISE, 10000000);
+            perform_action(account2, game_id, CALL, 10000000);
+            perform_action(account3, game_id, CALL, 10000000);
+            perform_action(account4, game_id, CALL, 10000000);
 
             let game_metadata = get_game_metadata_by_id(game_id);
 
             assert!(game_metadata.stage == STAGE_SHOWDOWN, EINVALID_GAME);
             assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
-        }; */
+
+            game_metadata.community = vector[
+                Card{cardId: 0, suit_string: b"hearts", value_string: b"3"},
+                Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"},
+                Card{cardId: 2, suit_string: b"clubs", value_string: b"7"},
+                Card{cardId: 3, suit_string: b"spades", value_string: b"2"},
+                Card{cardId: 4, suit_string: b"hearts", value_string: b"8"},
+            ];
+            
+            let winner = get_game_winner(&mut game_metadata);
+            let winner_index = winner.player_index;
+            assert!(winner_index == 3, EINVALID_GAME);
+        };
 
         let user1_games = borrow_global<UserGames>(signer::address_of(account1));
         let user2_games = borrow_global<UserGames>(signer::address_of(account2));
@@ -1020,16 +1037,16 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"2"},
-            Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"10"},
-            Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"}
+            Card{cardId: 0, suit_string: b"spades", value_string: b"2"},
+            Card{cardId: 1, suit_string: b"diamonds", value_string: b"10"},
+            Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}
             ]
         );
         
-        let player1 = create_player(@0x1, vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"}]);
-        let player2 = create_player(@0x2, vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"6"}]);
-        let player3 = create_player(@0x3, vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"9"}]);
-        let player4 = create_player(@0x4, vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}]);
+        let player1 = create_player(@0x1, vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}]);
+        let player2 = create_player(@0x2, vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"5"}, Card{cardId: 3, suit_string: b"spades", value_string: b"6"}]);
+        let player3 = create_player(@0x3, vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"9"}]);
+        let player4 = create_player(@0x4, vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}]);
 
         game_metadata.players = vector[player1, player2, player3, player4];
         
@@ -1042,16 +1059,16 @@ module poker::poker_manager {
         game_metadata.community = vector::empty();
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"2"},
-            Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"10"},
-            Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"},
+            Card{cardId: 0, suit_string: b"spades", value_string: b"2"},
+            Card{cardId: 1, suit_string: b"diamonds", value_string: b"10"},
+            Card{cardId: 2, suit_string: b"clubs", value_string: b"7"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"6"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"clubs", value_string: b"10"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"5"}, Card{cardId: 3, suit_string: b"spades", value_string: b"6"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"clubs", value_string: b"10"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
@@ -1065,16 +1082,16 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"2"},
-            Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"10"},
-            Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"},
+            Card{cardId: 0, suit_string: b"spades", value_string: b"2"},
+            Card{cardId: 1, suit_string: b"diamonds", value_string: b"10"},
+            Card{cardId: 2, suit_string: b"clubs", value_string: b"7"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"2"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"clubs", value_string: b"10"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}, Card{cardId: 3, suit_string: b"spades", value_string: b"2"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"clubs", value_string: b"10"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
@@ -1088,16 +1105,16 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"2"},
-            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"10"},
-            Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"},
+            Card{cardId: 0, suit_string: b"spades", value_string: b"2"},
+            Card{cardId: 1, suit_string: b"hearts", value_string: b"10"},
+            Card{cardId: 2, suit_string: b"clubs", value_string: b"7"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"3"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"4"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"7"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"2"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"clubs", value_string: b"10"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"7"}, Card{suit: 3, value: 0, suit_string: b"hearts", value_string: b"7"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}, Card{cardId: 3, suit_string: b"spades", value_string: b"2"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"clubs", value_string: b"10"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"7"}, Card{cardId: 3, suit_string: b"hearts", value_string: b"7"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
         
@@ -1111,16 +1128,16 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"2"},
-            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"5"},
-            Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"4"},
+            Card{cardId: 0, suit_string: b"spades", value_string: b"2"},
+            Card{cardId: 1, suit_string: b"hearts", value_string: b"5"},
+            Card{cardId: 2, suit_string: b"clubs", value_string: b"4"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"4"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"clubs", value_string: b"9"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"ace"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"3"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"5"}, Card{cardId: 3, suit_string: b"spades", value_string: b"4"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"clubs", value_string: b"9"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
@@ -1134,18 +1151,18 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"2"},
-            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"5"},
-            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"4"},
-            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"},
-            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"king"},
+            Card{cardId: 0, suit_string: b"spades", value_string: b"2"},
+            Card{cardId: 1, suit_string: b"hearts", value_string: b"5"},
+            Card{cardId: 2, suit_string: b"hearts", value_string: b"4"},
+            Card{cardId: 2, suit_string: b"spades", value_string: b"queen"},
+            Card{cardId: 2, suit_string: b"hearts", value_string: b"king"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"3"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"4"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"9"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"ace"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"3"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"5"}, Card{cardId: 3, suit_string: b"spades", value_string: b"4"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"hearts", value_string: b"9"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
@@ -1160,18 +1177,18 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"ace"},
-            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"5"},
-            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"4"},
-            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"},
-            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"queen"},
+            Card{cardId: 0, suit_string: b"spades", value_string: b"ace"},
+            Card{cardId: 1, suit_string: b"hearts", value_string: b"5"},
+            Card{cardId: 2, suit_string: b"hearts", value_string: b"4"},
+            Card{cardId: 2, suit_string: b"spades", value_string: b"queen"},
+            Card{cardId: 2, suit_string: b"hearts", value_string: b"queen"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"clubs", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"ace"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"5"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"4"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"9"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"clubs", value_string: b"ace"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"ace"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"5"}, Card{cardId: 3, suit_string: b"spades", value_string: b"4"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"hearts", value_string: b"9"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
@@ -1186,18 +1203,18 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"ace"},
-            Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"5"},
-            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"4"},
-            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"},
-            Card{suit: 2, value: 0, suit_string: b"hearts", value_string: b"queen"},
+            Card{cardId: 0, suit_string: b"spades", value_string: b"ace"},
+            Card{cardId: 1, suit_string: b"hearts", value_string: b"5"},
+            Card{cardId: 2, suit_string: b"hearts", value_string: b"4"},
+            Card{cardId: 2, suit_string: b"spades", value_string: b"queen"},
+            Card{cardId: 2, suit_string: b"hearts", value_string: b"queen"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"clubs", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"diamonds", value_string: b"ace"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"clubs", value_string: b"queen"}, Card{suit: 3, value: 0, suit_string: b"diamonds", value_string: b"queen"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"hearts", value_string: b"8"}, Card{suit: 1, value: 0, suit_string: b"hearts", value_string: b"9"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"clubs", value_string: b"ace"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"ace"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"queen"}, Card{cardId: 3, suit_string: b"diamonds", value_string: b"queen"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"hearts", value_string: b"9"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
@@ -1211,18 +1228,18 @@ module poker::poker_manager {
 
         vector::append(&mut game_metadata.community, 
             vector[
-            Card{suit: 0, value: 0, suit_string: b"diamonds", value_string: b"6"},
-            Card{suit: 1, value: 0, suit_string: b"spades", value_string: b"4"},
-            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"6"},
-            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"5"},
-            Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"3"},
+            Card{cardId: 0, suit_string: b"diamonds", value_string: b"6"},
+            Card{cardId: 1, suit_string: b"spades", value_string: b"4"},
+            Card{cardId: 2, suit_string: b"spades", value_string: b"6"},
+            Card{cardId: 2, suit_string: b"spades", value_string: b"5"},
+            Card{cardId: 2, suit_string: b"spades", value_string: b"3"},
             ]
         );
 
-        player1.hand = vector[Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"ace"}, Card{suit: 1, value: 0, suit_string: b"spades", value_string: b"king"}];
-        player2.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"queen"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"jack"}];
-        player3.hand = vector[Card{suit: 0, value: 0, suit_string: b"spades", value_string: b"10"}, Card{suit: 1, value: 0, suit_string: b"spades", value_string: b"9"}];
-        player4.hand = vector[Card{suit: 2, value: 0, suit_string: b"spades", value_string: b"8"}, Card{suit: 3, value: 0, suit_string: b"spades", value_string: b"7"}];
+        player1.hand = vector[Card{cardId: 0, suit_string: b"spades", value_string: b"ace"}, Card{cardId: 1, suit_string: b"spades", value_string: b"king"}];
+        player2.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"queen"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
+        player3.hand = vector[Card{cardId: 0, suit_string: b"spades", value_string: b"10"}, Card{cardId: 1, suit_string: b"spades", value_string: b"9"}];
+        player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"8"}, Card{cardId: 3, suit_string: b"spades", value_string: b"7"}];
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
