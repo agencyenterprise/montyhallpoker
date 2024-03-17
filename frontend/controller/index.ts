@@ -150,39 +150,20 @@ export const revealPlayerCard = async (
     const currentPlayerAddress = getAddressFromPublicKey(userPubKey);
     const currentPlayer = game.players.find((v) => v.id.replace("0x", "") == currentPlayerAddress.replace("0x0", ""));
     const playerCards = currentPlayer!.hand.map((v) => ({
-        value: v.value,
-        suit: v.suit,
+        value: v.cardId ? v.cardId : v.value,
+        suit: v.cardId ? v.cardId : v.suit,
     }));
     if (currentPlayer!.status != PlayerStatus.Active) {
         throw new Error("Player is not active in this game");
     }
     const playerPrivateCards: Hand[] = await Promise.all(
         playerCards.map(
-            async (v): Promise<Hand> => revealMappingFromDB(gameId, v.value, v.suit)
+            async (v): Promise<Hand> => revealMappingFromDB(gameId, v.value!, v.suit!)
         )
     );
     return playerPrivateCards;
 };
 
-const checkIfCardBelongToCommunityDeck = (
-    tableCard: DeckCard,
-    communityDeck: DeckCard[]
-): boolean => {
-    return !!communityDeck.find(
-        (v) => v.suit == tableCard.suit && v.value == tableCard.value
-    );
-};
-
-const checkIfTableCardsBelongToCommunityDeck = (
-    tableCards: DeckCard[],
-    communityDeck: DeckCard[]
-): boolean => {
-    return tableCards.reduce(
-        (acc, value) =>
-            acc && checkIfCardBelongToCommunityDeck(value, communityDeck),
-        true
-    );
-};
 
 const getTableCards = (game: GameState) => {
     return game.community;
@@ -194,16 +175,9 @@ export const revealCommunityCards = async (gameId: number): Promise<Hand[]> => {
         throw new Error("Game not found");
     }
     const tableCards = getTableCards(game);
-    const communityDeck = game!.deck;
-    const areTableCardsCommunityCards = checkIfTableCardsBelongToCommunityDeck(
-        tableCards,
-        communityDeck
-    );
-    if (!areTableCardsCommunityCards) {
-        throw new Error("Table cards are not community Cards");
-    }
+    console.log(tableCards)
     const revealedCommunityCards = await Promise.all(
-        tableCards.map(async (v) => revealMappingFromDB(gameId, v.value, v.suit))
+        tableCards.map(async (v) => revealMappingFromDB(gameId, v.cardId ? v.cardId : v.value!, v.cardId ? v.cardId : v.suit!))
     );
     return revealedCommunityCards;
 };
