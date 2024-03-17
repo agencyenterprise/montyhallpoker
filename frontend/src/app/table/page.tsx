@@ -1,6 +1,8 @@
+import { buttonStyles } from "@/components/WalletButtons";
 import classnames from "classnames";
 import Image from "next/image";
 
+import { cn } from "@/utils/styling";
 interface TableProps {
   players: string[];
 }
@@ -38,9 +40,47 @@ export default function Table({ players }: TableProps) {
           <Card valueString="diamonds_ace" size="small" />
           <Card valueString="diamonds_ace" size="small" />
         </div>
+        <div className="absolute -bottom-20 flex gap-x-4">
+          <ActionButtons />
+        </div>
         <PokerTable />
       </div>
     </div>
+  );
+}
+
+function ActionButtons() {
+  return (
+    <>
+      <button
+        className={cn(
+          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
+        )}
+      >
+        Raise
+      </button>
+      <button
+        className={cn(
+          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
+        )}
+      >
+        Fold
+      </button>
+      <button
+        className={cn(
+          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
+        )}
+      >
+        Call
+      </button>
+      <button
+        className={cn(
+          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
+        )}
+      >
+        Check
+      </button>
+    </>
   );
 }
 

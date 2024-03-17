@@ -3,25 +3,21 @@
 import { useWallet, WalletReadyState, Wallet, isRedirectable, WalletName } from "@aptos-labs/wallet-adapter-react";
 import { cn } from "@/utils/styling";
 import { HexString, TxnBuilderTypes } from "aptos";
+import Button from "../Button";
 
-const buttonStyles =
-  "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
+export const buttonStyles = "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]";
 
 export const WalletButtons = () => {
   const { wallets, connected, disconnect, isLoading } = useWallet();
 
-  if (connected) {
+  if (connected || isLoading || !wallets[0]) {
     return (
       <div className="flex flex-row">
-        <div className={cn(buttonStyles, "hover:scale-110 btn-small")} onClick={disconnect}>
+        <Button loading={isLoading || !wallets[0]} onClick={disconnect}>
           Disconnect
-        </div>
+        </Button>
       </div>
     );
-  }
-
-  if (isLoading || !wallets[0]) {
-    return <div className={cn(buttonStyles, "opacity-50 cursor-not-allowed")}>Loading...</div>;
   }
 
   return <WalletView wallet={wallets[0]} />;
@@ -44,8 +40,7 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
 
       pubKey = new TxnBuilderTypes.Ed25519PublicKey(key);
 
-      const authKey =
-        TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey);
+      const authKey = TxnBuilderTypes.AuthenticationKey.fromEd25519PublicKey(pubKey);
 
       console.log(authKey.derivedAddress().toString());
     } catch (error) {
@@ -64,44 +59,15 @@ const WalletView = ({ wallet }: { wallet: Wallet }) => {
    * isRedirectable() - are we on mobile AND not in an in-app browser
    * mobileSupport - does wallet have deeplinkProvider property? i.e does it support a mobile app
    */
-  if (!isWalletReady && isRedirectable()) {
-    // wallet has mobile app
-    if (mobileSupport) {
-      return (
-        <button
-          className={cn(buttonStyles, "hover:scale-110 btn-small")}
-          disabled={false}
-          key={wallet.name}
-          onClick={() => onWalletConnectRequest(wallet.name)}
-          style={{ maxWidth: "300px" }}
-        >
-          Connect Wallet
-        </button>
-      );
-    }
-    // wallet does not have mobile app
-    return (
-      <button
-        className={cn(buttonStyles, "opacity-50 cursor-not-allowed")}
-        disabled={true}
-        key={wallet.name}
-        style={{ maxWidth: "300px" }}
-      >
-        Connect Wallet - Desktop Only
-      </button>
-    );
-  } else {
-    // desktop
-    return (
-      <button
-        className={cn(buttonStyles, isWalletReady ? "hover:scale-110" : "opacity-50 cursor-not-allowed")}
-        disabled={!isWalletReady}
-        key={wallet.name}
-        onClick={() => onWalletConnectRequest(wallet.name)}
-        style={{ maxWidth: "300px" }}
-      >
-        Connect Wallet
-      </button>
-    );
-  }
+  return (
+    <Button
+      className={cn(buttonStyles, isWalletReady ? "hover:scale-110" : "opacity-50 cursor-not-allowed")}
+      disabled={!isWalletReady}
+      key={wallet.name}
+      onClick={() => onWalletConnectRequest(wallet.name)}
+      style={{ maxWidth: "300px" }}
+    >
+      Connect Wallet
+    </Button>
+  );
 };
