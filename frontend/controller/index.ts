@@ -50,11 +50,6 @@ const revealMappingFromDB = async (
         throw new Error("No game found!");
     }
     const { valueMapping, suitMapping } = gameMapping;
-    const privateHandValue = valueMapping[value] as string;
-    const privateHandSuit = suitMapping[suit] as string;
-    if (!privateHandValue || !privateHandSuit) {
-        throw new Error("Invalid suit or value index");
-    }
     const parsedCards = transformValueSuitMappingToSequencialMapping(valueMapping, suitMapping);
     const privateCard = suit == value ? parsedCards[suit] : parsedCards[suit * 13 + value];
     return { value: privateCard.value, suit: privateCard.suit };
@@ -111,13 +106,22 @@ export const createCardMapping = async (gameId: number) => {
 const extractGamePlayers = (game: GameState) => {
     return game.players.map((v) => v.id);
 };
+const parseAddress = (userAddress: string) => {
+    if (userAddress.startsWith("0x0")) {
+        userAddress = userAddress.replace("0x0", "");
+    } else if (userAddress.startsWith("0x")) {
+        userAddress = userAddress.replace("0x", "");
 
+    }
+    return userAddress;
+}
 const isPlayerPresentOnGame = async (
     pubKey: string,
     userSignedMessage: UserSignedMessage,
     players: string[]
 ): Promise<boolean> => {
-    const userAddress = getAddressFromPublicKey(pubKey);
+    let userAddress = parseAddress(getAddressFromPublicKey(pubKey));
+
     const isSignatureValid = await verifySignature(
         pubKey,
         userSignedMessage.message,
@@ -126,7 +130,7 @@ const isPlayerPresentOnGame = async (
     if (!isSignatureValid) {
         throw new Error("Invalid signature!");
     }
-    return !!players.find((v) => v.replace("0x", "") == userAddress.replace("0x0", ""));
+    return !!players.find((v) => parseAddress(v) == userAddress);
 };
 
 export const revealPlayerCard = async (
@@ -148,7 +152,7 @@ export const revealPlayerCard = async (
         throw new Error("User does not have permission to reveal cards");
     }
     const currentPlayerAddress = getAddressFromPublicKey(userPubKey);
-    const currentPlayer = game.players.find((v) => v.id.replace("0x", "") == currentPlayerAddress.replace("0x0", ""));
+    const currentPlayer = game.players.find((v) => parseAddress(v.id) == parseAddress(currentPlayerAddress));
     const playerCards = currentPlayer!.hand.map((v) => ({
         value: v.cardId ? v.cardId : v.value,
         suit: v.cardId ? v.cardId : v.suit,
@@ -175,9 +179,9 @@ export const revealCommunityCards = async (gameId: number): Promise<Hand[]> => {
         throw new Error("Game not found");
     }
     const tableCards = getTableCards(game);
-    console.log(tableCards)
     const revealedCommunityCards = await Promise.all(
         tableCards.map(async (v) => revealMappingFromDB(gameId, v.cardId ? v.cardId : v.value!, v.cardId ? v.cardId : v.suit!))
     );
     return revealedCommunityCards;
 };
+
