@@ -10,7 +10,7 @@ import {
 import { getGameMapping } from "./index"
 type Hand = { suit: string; value: string };
 
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "0xe4ab044df91caf41e1b13ea1a2d57a72f5d9a3b8edb52755046e3f5d3d3082d7";
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS!
 const CONTRACT_PRIVATE_KEY = process.env.CONTRACT_PRIVATE_KEY
 
 
@@ -32,11 +32,12 @@ export const revealGameCards = async (gameId: number | string) => {
     const orderedSuits = orderedMapping.map(card => card.suit);
     const orderedValues = orderedMapping.map(card => card.value);
     const account = await Account.fromPrivateKeyAndAddress({ privateKey, address });
+    console.log(orderedSuits.length, orderedValues.length)
     const transaction = await aptos.transaction.build.simple({
         sender: account.accountAddress,
         data: {
             function: `${CONTRACT_ADDRESS}::poker_manager::populate_card_values`,
-            functionArguments: [`${gameId}`, orderedSuits, orderedValues],
+            functionArguments: [`1`, orderedSuits, orderedValues],
         },
     });
     const txHash = await aptos.signAndSubmitTransaction({ signer: account, transaction: transaction });

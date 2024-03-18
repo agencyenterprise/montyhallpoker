@@ -61,10 +61,12 @@ export default function PokerGameTable({ params }: { params: any }) {
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
     setGameState(game);
+    console.log(me)
     const mePlayer = gameState?.players.find((player) => player.id === me)!;
     const mePlayerIndex = gameState?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
-    console.log("oie", mePlayerIndex);
+    //console.log("oie", mePlayerIndex);
+    //console.log(me)
   };
   usePollingEffect(async () => await gameWorker(), [], {
     interval: 2000,
@@ -94,9 +96,13 @@ export default function PokerGameTable({ params }: { params: any }) {
     const wallet = getAptosWallet();
     try {
       const account = await wallet?.account();
-      setMe(account.address);
-      setGameStarted(true);
-      setCurrentPot(Number(gameState?.pot) / 10 ** 8);
+
+      if (account.address) {
+        setMe(account.address);
+        console.log(account.address);
+        setGameStarted(true);
+        setCurrentPot(Number(gameState?.pot) / 10 ** 8);
+      }
     } catch (error) {
       // { code: 4001, message: "User rejected the request."}
     }
@@ -132,7 +138,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 
     const data = await res.json();
     if (data.message == "OK") {
-      console.log(data);
+      //console.log(data);
       setUserCards(data.userCards);
     }
   };
@@ -201,7 +207,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
   const performAction = async (action: number, amount: number) => {
     if (!gameState?.id) {
-      console.log("no game id");
+      //console.log("no game id");
       return;
     }
 
@@ -221,7 +227,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
       });
       // Do something
     } catch (error: any) {
-      console.error(error);
+      //console.error(error);
     }
   };
 
