@@ -95,7 +95,10 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
   }, [gameStarted, gameState]);
 
-  const revealComunityCards = async (gameId: string | number) => {
+  const revealComunityCards = async (gameId: string) => {
+    if (!gameId) {
+      return;
+    }
     const response = await fetch(`/api/reveal/community`, {
       method: "POST",
       body: JSON.stringify({ gameId: Number(gameId) }),
