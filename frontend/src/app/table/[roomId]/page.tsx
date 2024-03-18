@@ -15,7 +15,7 @@ import { usePollingEffect } from "@/hooks/usePoolingEffect";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { getAptosClient } from "../../../utils/aptosClient";
 import Button from "@/components/Button";
-
+import { parseAddress } from "@/utils/address";
 const getAptosWallet = (): any => {
   if ("aptos" in window) {
     return window.aptos;
@@ -60,13 +60,15 @@ export default function PokerGameTable({ params }: { params: any }) {
   const controller = new AbortController();
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
-    setGameState(game);
+    console.log("game: ", game)
     const wallet = getAptosWallet();
     const { address } = await wallet?.account()
-    console.log("address: ", address)
-    const mePlayer = gameState?.players.find((player) => player.id === address)!;
-    const mePlayerIndex = gameState?.players.indexOf(mePlayer);
+    const mePlayer = game?.players.find((player) => parseAddress(player.id) === parseAddress(address))!;
+    console.log("mePlayer: ", mePlayer)
+    const mePlayerIndex = game?.players.indexOf(mePlayer);
+    console.log("mePlayerIndex: ", mePlayerIndex)
     setMeIndex(mePlayerIndex || 0);
+    setGameState(game);
     //console.log("oie", mePlayerIndex);
     //console.log(me)
   };
@@ -81,7 +83,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   useEffect(() => {
     retrieveGameState();
-  }, []);
+  }, [gameState]);
 
   useEffect(() => {
     if (
@@ -153,14 +155,14 @@ export default function PokerGameTable({ params }: { params: any }) {
           <PlayerBanner
             isMe={false}
             currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={meIndex + 1}
+            playerIndex={(meIndex + 1) % 4}
             stack={1000}
             position={2}
           />
           <PlayerBanner
             isMe={false}
             currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={meIndex + 2}
+            playerIndex={(meIndex + 2) % 4}
             stack={1000}
             position={1}
           />
@@ -169,7 +171,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           <PlayerBanner
             isMe={true}
             currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={meIndex}
+            playerIndex={meIndex % 4}
             stack={1000}
             position={0}
             cards={userCards}
@@ -177,7 +179,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           <PlayerBanner
             isMe={false}
             currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={meIndex + 3}
+            playerIndex={(meIndex + 3) % 4}
             stack={1000}
             position={3}
           />
@@ -191,7 +193,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           <ActionButtons meIndex={meIndex} gameState={gameState!} />
         </div>
         <div className="absolute right-40 h-full flex justify-center items-center text-white">
-          Pot: {currentPot.toFixed(2)}
+          Pot: {currentPot.toFixed(2)} APT
         </div>
         <PokerTable />
       </div>
