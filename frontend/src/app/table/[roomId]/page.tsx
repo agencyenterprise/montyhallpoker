@@ -61,8 +61,9 @@ export default function PokerGameTable({ params }: { params: any }) {
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
     setGameState(game);
-    console.log(me)
-    const mePlayer = gameState?.players.find((player) => player.id === me)!;
+    const wallet = getAptosWallet();
+    const { address } = await wallet?.account()
+    const mePlayer = gameState?.players.find((player) => player.id === address)!;
     const mePlayerIndex = gameState?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     //console.log("oie", mePlayerIndex);
@@ -105,6 +106,7 @@ export default function PokerGameTable({ params }: { params: any }) {
       }
     } catch (error) {
       // { code: 4001, message: "User rejected the request."}
+      console.error(error);
     }
     setLoaded(true);
   };
