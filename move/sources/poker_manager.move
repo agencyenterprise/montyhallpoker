@@ -61,6 +61,9 @@ module poker::poker_manager {
     const STATUS_FOLDED: u8 = 1;
     const STATUS_ALL_IN: u8 = 2;
 
+    // Fees
+    const HOUSE_FEE: u64 = 1; // 1% of the pot
+
     // Card hierarchy
     const CARD_HIERARCHY: vector<vector<u8>> = vector[b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9", b"10", b"jack", b"queen", b"king", b"ace"];
 
@@ -81,6 +84,11 @@ module poker::poker_manager {
     struct LastRaiser has drop, copy, store {
         playerId: address,
         playerMove: u64,
+    }
+
+    struct SidePot has drop, copy, store {
+        amount: u64,
+        eligible_players: vector<address>,
     }
     
     struct GameMetadata has drop, copy, store {
@@ -214,6 +222,25 @@ module poker::poker_manager {
             last_action_timestamp: 0,
             current_bet: 0,
         }
+    }
+
+    fun get_max_raise_for(addr: address, game_metadata: &GameMetadata): u64 {
+        let min_balance_after_current_bet: u64 = U64_MAX;
+
+        let i = 0;
+        while (i < vector::length(&game_metadata.players)) {
+            let player = vector::borrow(&game_metadata.players, i);
+            // Skip folded players
+            if (player.status == STATUS_ACTIVE && player.id != addr) {
+                let player_balance = coin::balance<AptosCoin>(player.id);
+                let balance_after_current_bet = player_balance - player.current_bet;
+                if (balance_after_current_bet < min_balance_after_current_bet) {
+                    min_balance_after_current_bet = balance_after_current_bet;
+                }
+            };
+            i = i + 1;
+        };
+        min_balance_after_current_bet
     }
     
     fun all_have_called_or_are_all_in(players: &vector<Player>, current_bet: u64): bool {
@@ -520,8 +547,6 @@ module poker::poker_manager {
             aptos_account::transfer(from, winner_addr, (pot_divided as u64));
             k = k + 1;
         };
-
-        game_metadata.state = GAMESTATE_CLOSED;
     }
 
     public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
@@ -605,6 +630,7 @@ module poker::poker_manager {
             player.current_bet = player.current_bet + diff;
             game_metadata.pot = game_metadata.pot + diff;
         } else if (action == RAISE) {
+            
             debug::print(&string::utf8(b"Amount has to be: "));
             debug::print(&(game_metadata.current_bet + game_metadata.stake));
             // Raise has to be at least current bet + stake
@@ -639,8 +665,7 @@ module poker::poker_manager {
 
         if (activePlayers == 1) {
             game_metadata.winners = vector[vector::borrow(&game_metadata.players, (lastActivePlayerIndex as u64)).id];
-            game_metadata.state = GAMESTATE_CLOSED;
-            //create_game(game_metadata.room_id);
+            // Player will call populate_card_values
         } else if (activePlayers == 0) {
             game_metadata.state = GAMESTATE_CLOSED;
             //create_game(game_metadata.room_id);
