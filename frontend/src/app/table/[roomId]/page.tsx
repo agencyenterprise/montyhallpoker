@@ -49,7 +49,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [playerTwo, setPlayerTwo] = useState(null);
   const [playerThree, setPlayerThree] = useState(null);
   const [playerFour, setPlayerFour] = useState(null);
-  const [communityCards, setCommunityCards] = useState([]);
+  const [communityCards, setCommunityCards] = useState<PlayerCards[]>([]);
   const [currentPot, setCurrentPot] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [handRevealed, setHandRevealed] = useState(false);
@@ -60,18 +60,23 @@ export default function PokerGameTable({ params }: { params: any }) {
   const controller = new AbortController();
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
-    console.log("game: ", game)
+    console.log("game: ", game);
     const wallet = getAptosWallet();
-    const { address } = await wallet?.account()
-    const mePlayer = game?.players.find((player) => parseAddress(player.id) === parseAddress(address))!;
-    console.log("mePlayer: ", mePlayer)
+    const { address } = await wallet?.account();
+    const mePlayer = game?.players.find(
+      (player) => parseAddress(player.id) === parseAddress(address)
+    )!;
+    console.log("mePlayer: ", mePlayer);
     const mePlayerIndex = game?.players.indexOf(mePlayer);
-    console.log("mePlayerIndex: ", mePlayerIndex)
+    console.log("mePlayerIndex: ", mePlayerIndex);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
+    console.log(game?.community || []);
+    await revealComunityCards();
     //console.log("oie", mePlayerIndex);
     //console.log(me)
   };
+
   usePollingEffect(async () => await gameWorker(), [], {
     interval: 2000,
     stop,
@@ -96,11 +101,26 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
   }, [gameStarted, gameState]);
 
+  const revealComunityCards = async () => {
+    const response = await fetch(`/api/reveal/community`, {
+      method: "POST",
+      body: JSON.stringify({ gameId: Number(gameState?.id) }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await response.json();
+    console.log("asdasd", data);
+    if (data.message == "OK") {
+      setCommunityCards(data.communityCards);
+    }
+  };
+
   const retrieveGameState = async (): Promise<void> => {
     const wallet = getAptosWallet();
     try {
       const account = await wallet?.account();
-      console.log("Not null address: ", account.address)
+      console.log("Not null address: ", account.address);
       if (account.address) {
         setMe(account.address);
 
@@ -186,7 +206,11 @@ export default function PokerGameTable({ params }: { params: any }) {
         </div>
         <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
           {communityCards.map((card, index) => (
-            <Card valueString={card} size="large" key={index} />
+            <Card
+              valueString={`${card.suit}_${card.value}`}
+              size="large"
+              key={index}
+            />
           ))}
         </div>
         <div className="absolute -bottom-20 flex gap-x-4">
