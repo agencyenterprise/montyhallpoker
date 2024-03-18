@@ -60,21 +60,15 @@ export default function PokerGameTable({ params }: { params: any }) {
   const controller = new AbortController();
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
-    console.log("game: ", game);
     const wallet = getAptosWallet();
     const { address } = await wallet?.account();
     const mePlayer = game?.players.find(
       (player) => parseAddress(player.id) === parseAddress(address)
     )!;
-    console.log("mePlayer: ", mePlayer);
     const mePlayerIndex = game?.players.indexOf(mePlayer);
-    console.log("mePlayerIndex: ", mePlayerIndex);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
-    console.log(game?.community || []);
-    await revealComunityCards(game?.id);
-    //console.log("oie", mePlayerIndex);
-    //console.log(me)
+    await revealComunityCards(game!.id!);
   };
 
   usePollingEffect(async () => await gameWorker(), [], {
@@ -113,7 +107,6 @@ export default function PokerGameTable({ params }: { params: any }) {
       },
     });
     const data = await response.json();
-    console.log("asdasd", data);
     if (data.message == "OK") {
       setCommunityCards(data.communityCards);
     }
@@ -123,7 +116,6 @@ export default function PokerGameTable({ params }: { params: any }) {
     const wallet = getAptosWallet();
     try {
       const account = await wallet?.account();
-      console.log("Not null address: ", account.address);
       if (account.address) {
         setMe(account.address);
 
@@ -166,7 +158,6 @@ export default function PokerGameTable({ params }: { params: any }) {
 
     const data = await res.json();
     if (data.message == "OK") {
-      //console.log(data);
       setUserCards(data.userCards);
     }
   };
@@ -243,7 +234,6 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
   const performAction = async (action: number, amount: number) => {
     if (!gameState?.id) {
-      //console.log("no game id");
       return;
     }
 
