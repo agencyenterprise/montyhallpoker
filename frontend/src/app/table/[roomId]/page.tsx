@@ -4,11 +4,17 @@ import classnames from "classnames";
 import Image from "next/image";
 import { cn } from "@/utils/styling";
 import { useEffect, useState } from "react";
-import { CONTRACT_ADDRESS, GameState, GameStatus, getGameByRoomId } from "../../../../controller/contract";
+import {
+  CONTRACT_ADDRESS,
+  GameState,
+  GameStatus,
+  getGameByRoomId,
+} from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { getAptosClient } from "../../../utils/aptosClient";
+import Button from "@/components/Button";
 
 const getAptosWallet = (): any => {
   if ("aptos" in window) {
@@ -16,6 +22,14 @@ const getAptosWallet = (): any => {
   } else {
     window.open("https://petra.app/", `_blank`);
   }
+};
+
+const ACTIONS = {
+  FOLD: 0,
+  CHECK: 1,
+  CALL: 2,
+  RAISE: 3,
+  ALL_IN: 4,
 };
 
 const aptosClient = getAptosClient();
@@ -41,7 +55,6 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [gameState, setGameState] = useState<Maybe<GameState>>();
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
   const [stop, setStop] = useState(false);
-  const { signAndSubmitTransaction } = useWallet();
   const controller = new AbortController();
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
@@ -62,7 +75,11 @@ export default function PokerGameTable({ params }: { params: any }) {
   });
 
   useEffect(() => {
-    if (gameState && gameState?.state === GameStatus.INPROGRESS && !handRevealed) {
+    if (
+      gameState &&
+      gameState?.state === GameStatus.INPROGRESS &&
+      !handRevealed
+    ) {
       revealCurrentUserCard();
       setHandRevealed(true);
     }
@@ -79,29 +96,6 @@ export default function PokerGameTable({ params }: { params: any }) {
       // { code: 4001, message: "User rejected the request."}
     }
     setLoaded(true);
-  };
-
-  // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
-  const performAction = async (action: number, amount: number) => {
-    try {
-      const wallet = getAptosWallet();
-      const account = await wallet?.account();
-      const response = await signAndSubmitTransaction({
-        sender: account.address,
-
-        data: {
-          function: `${CONTRACT_ADDRESS}::poker_manager::perform_action`,
-          typeArguments: [],
-          functionArguments: [`${gameState?.id}`, `${action}`, `${amount}`],
-        },
-      });
-      await aptosClient.waitForTransaction({
-        transactionHash: response.hash,
-      });
-      // Do something
-    } catch (error: any) {
-      console.error(error);
-    }
   };
 
   const revealCurrentUserCard = async () => {
@@ -140,12 +134,33 @@ export default function PokerGameTable({ params }: { params: any }) {
     <div className="h-full w-full flex items-center justify-center relative">
       <div className="relative">
         <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
-          <PlayerBanner isMe={false} name="Player 1" stack={1000} position={1} />
-          <PlayerBanner isMe={false} name="Player 2" stack={1000} position={1} />
+          <PlayerBanner
+            isMe={false}
+            name="Player 1"
+            stack={1000}
+            position={1}
+          />
+          <PlayerBanner
+            isMe={false}
+            name="Player 2"
+            stack={1000}
+            position={1}
+          />
         </div>
         <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
-          <PlayerBanner isMe={true} name="Player 3" stack={1000} position={1} cards={userCards} />
-          <PlayerBanner isMe={false} name="Player 4" stack={1000} position={1} />
+          <PlayerBanner
+            isMe={true}
+            name="Player 3"
+            stack={1000}
+            position={1}
+            cards={userCards}
+          />
+          <PlayerBanner
+            isMe={false}
+            name="Player 4"
+            stack={1000}
+            position={1}
+          />
         </div>
         <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
           {communityCards.map((card, index) => (
@@ -153,7 +168,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           ))}
         </div>
         <div className="absolute -bottom-20 flex gap-x-4">
-          <ActionButtons />
+          <ActionButtons gameState={gameState!} />
         </div>
         <div className="absolute right-40 h-full flex justify-center items-center text-white">
           Pot: {currentPot.toFixed(2)}
@@ -164,23 +179,71 @@ export default function PokerGameTable({ params }: { params: any }) {
   );
 }
 
-function ActionButtons() {
+interface ActionButtonsProps {
+  gameState: Maybe<GameState>;
+}
+
+function ActionButtons({ gameState }: ActionButtonsProps) {
+  const { signAndSubmitTransaction } = useWallet();
+  const [raiseValue, setRaiseValue] = useState(0);
+
+  // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
+  const performAction = async (action: number, amount: number) => {
+    if (!gameState?.id) {
+      console.log("no game id");
+      return;
+    }
+
+    try {
+      const wallet = getAptosWallet();
+      const account = await wallet?.account();
+      const response = await signAndSubmitTransaction({
+        sender: account.address,
+        data: {
+          function: `${CONTRACT_ADDRESS}::poker_manager::perform_action`,
+          typeArguments: [],
+          functionArguments: [`${gameState.id}`, `${action}`, `${amount}`],
+        },
+      });
+      await aptosClient.waitForTransaction({
+        transactionHash: response.hash,
+      });
+      // Do something
+    } catch (error: any) {
+      console.error(error);
+    }
+  };
+
   return (
-    <>
-      <button className={cn("nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]")}>
+    <div className="flex flex-col gap-y-4">
+      <Button
+        onClick={() => performAction(ACTIONS.RAISE, Number(gameState?.stake))}
+      >
         Raise
-      </button>
-      <button className={cn("nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]")}>Fold</button>
-      <button className={cn("nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]")}>Call</button>
-      <button className={cn("nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]")}>
-        Check
-      </button>
-    </>
+      </Button>
+      <div className="flex gap-x-4 ">
+        <Button onClick={() => performAction(ACTIONS.FOLD, 0)}>Fold</Button>
+        {Number(gameState?.current_bet) > 0 && (
+          <Button
+            onClick={() =>
+              performAction(ACTIONS.CALL, Number(gameState?.stake))
+            }
+          >
+            Call
+          </Button>
+        )}
+        {Number(gameState?.current_bet) === 0 && (
+          <Button onClick={() => performAction(ACTIONS.CHECK, 0)}>Check</Button>
+        )}
+      </div>
+    </div>
   );
 }
 
 function PokerTable() {
-  return <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />;
+  return (
+    <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />
+  );
 }
 
 interface PlayerBannerProps {
@@ -190,7 +253,13 @@ interface PlayerBannerProps {
   cards?: PlayerCards[];
   position: number;
 }
-function PlayerBanner({ isMe, name, stack, cards, position }: PlayerBannerProps) {
+function PlayerBanner({
+  isMe,
+  name,
+  stack,
+  cards,
+  position,
+}: PlayerBannerProps) {
   const width = isMe ? "w-[230px]" : "w-[174px]";
 
   return (
@@ -202,7 +271,13 @@ function PlayerBanner({ isMe, name, stack, cards, position }: PlayerBannerProps)
           width
         )}
       >
-        <Image src="/player-avatar.svg" alt="Avatar" width={81} height={81} className="" />
+        <Image
+          src="/player-avatar.svg"
+          alt="Avatar"
+          width={81}
+          height={81}
+          className=""
+        />
         <div className="text-white flex flex-col justify-between py-2">
           <h1 className="font-bold text-sm">{name}</h1>
           <div>
@@ -229,13 +304,24 @@ function Cards({ cards }: CardsProps) {
   const cardPosition = cards?.length ? "left-4" : `left-10`;
 
   return (
-    <div className={classnames("w-[91px] h-[91px] z-[1] text-white absolute -top-10", cardPosition)}>
+    <div
+      className={classnames(
+        "w-[91px] h-[91px] z-[1] text-white absolute -top-10",
+        cardPosition
+      )}
+    >
       <div className="flex relative mx-auto">
         {!cards?.length && <BackCards />}
         {cards?.length && (
           <div className="absolute flex gap-x-[10px] -top-10">
-            <Card valueString={`${cards[0].suit}_${cards[0].value}`} size="large" />
-            <Card valueString={`${cards[1].suit}_${cards[1].value}`} size="large" />
+            <Card
+              valueString={`${cards[0].suit}_${cards[0].value}`}
+              size="large"
+            />
+            <Card
+              valueString={`${cards[1].suit}_${cards[1].value}`}
+              size="large"
+            />
           </div>
         )}
       </div>
@@ -246,13 +332,31 @@ function Cards({ cards }: CardsProps) {
 function BackCards() {
   return (
     <div>
-      <Image src="/card-back.svg" alt="Card Back" width={61} height={91} className="absolute z-[2]" />
-      <Image src="/card-back.svg" alt="Card Back" width={61} height={91} className="absolute z-[1] left-[30px]" />
+      <Image
+        src="/card-back.svg"
+        alt="Card Back"
+        width={61}
+        height={91}
+        className="absolute z-[2]"
+      />
+      <Image
+        src="/card-back.svg"
+        alt="Card Back"
+        width={61}
+        height={91}
+        className="absolute z-[1] left-[30px]"
+      />
     </div>
   );
 }
 
-function Card({ valueString, size }: { valueString: string; size: "small" | "large" }) {
+function Card({
+  valueString,
+  size,
+}: {
+  valueString: string;
+  size: "small" | "large";
+}) {
   const width = size === "small" ? 61 : 95;
   const height = size === "small" ? 91 : 144;
   return (
@@ -263,7 +367,12 @@ function Card({ valueString, size }: { valueString: string; size: "small" | "lar
         height: `${height}px`,
       }}
     >
-      <Image src={`/cards/${valueString}.png`} alt="Card Club" width={width} height={height} />
+      <Image
+        src={`/cards/${valueString}.png`}
+        alt="Card Club"
+        width={width}
+        height={height}
+      />
     </div>
   );
 }
