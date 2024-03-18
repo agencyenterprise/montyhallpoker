@@ -79,7 +79,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   useEffect(() => {
     retrieveGameState();
-  });
+  }, []);
 
   useEffect(() => {
     if (
