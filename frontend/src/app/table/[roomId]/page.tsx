@@ -152,13 +152,15 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
           <PlayerBanner
             isMe={false}
-            name={`Player ${((meIndex + 1) % 4) + 1}`}
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={meIndex + 1}
             stack={1000}
-            position={1}
+            position={2}
           />
           <PlayerBanner
             isMe={false}
-            name={`Player ${((meIndex + 2) % 4) + 1}`}
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={meIndex + 2}
             stack={1000}
             position={1}
           />
@@ -166,16 +168,18 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
           <PlayerBanner
             isMe={true}
-            name={`Player ${meIndex + 1}`}
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={meIndex}
             stack={1000}
-            position={1}
+            position={0}
             cards={userCards}
           />
           <PlayerBanner
             isMe={false}
-            name={`Player ${((meIndex + 3) % 4) + 1}`}
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={meIndex + 3}
             stack={1000}
-            position={1}
+            position={3}
           />
         </div>
         <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
@@ -304,22 +308,26 @@ function PokerTable() {
 
 interface PlayerBannerProps {
   isMe: boolean;
-  name: string;
+  currentIndex: number;
+  playerIndex: number;
   stack: number;
   cards?: PlayerCards[];
   position: number;
 }
 function PlayerBanner({
   isMe,
-  name,
+  currentIndex,
+  playerIndex: index,
   stack,
   cards,
   position,
 }: PlayerBannerProps) {
   const width = isMe ? "w-[230px]" : "w-[174px]";
+  const playerIndex = index % 4;
 
   return (
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
+      {playerIndex == currentIndex && <TurnToken position={position} />}
       <Cards cards={cards} />
       <div
         className={classnames(
@@ -335,7 +343,7 @@ function PlayerBanner({
           className=""
         />
         <div className="text-white flex flex-col justify-between py-2">
-          <h1 className="font-bold text-sm">{name}</h1>
+          <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
           <div>
             <div className="flex gap-x-1 text-xs">
               <Image src="/stack-icon.svg" height="13" width="13" alt="icon" />
@@ -349,6 +357,20 @@ function PlayerBanner({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TurnToken({ position }: { position: number }) {
+  return (
+    <div
+      className={classnames(
+        "absolute -bottom-20 rounded-full text-white font-bold border-cyan-400 border bg-slate-700 w-10 h-10 flex items-center justify-center",
+        position == 0 ? "-top-20 -left-10" : "",
+        position == 3 ? "-top-20" : ""
+      )}
+    >
+      T
     </div>
   );
 }
