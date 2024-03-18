@@ -90,8 +90,6 @@ module poker::poker_manager {
         currentRound: u8,
         stage: u8,
         currentPlayerIndex: u8,
-        continueBetting: bool,
-        order: vector<Card>,
         lastRaiser: option::Option<LastRaiser>,
         seed: u8,
         id: u64,
@@ -103,7 +101,7 @@ module poker::poker_manager {
         last_action_timestamp: u64,
         turn: address,
         current_bet: u64,
-        winner: address,
+        winners: vector<address>,
     }
 
     struct GameState has key {
@@ -203,15 +201,13 @@ module poker::poker_manager {
             state: GAMESTATE_OPEN,
             stake: get_stake(room_id),
             turn: @0x0,
-            winner: @0x0,
+            winners: vector::empty(),
             players: vector::empty(),
             deck: vector::empty(),
             community: vector::empty(),
             currentRound: 0,
             stage: 0,
             currentPlayerIndex: 0,
-            continueBetting: true,
-            order: vector::empty(),
             lastRaiser: option::none<LastRaiser>(),
             seed: 0,
             starter: random_player,
@@ -316,8 +312,8 @@ module poker::poker_manager {
         game_metadata.turn = vector::borrow(&game_metadata.players, (game_metadata.starter as u64)).id;
         game_metadata.current_bet = 0;
         game_metadata.last_action_timestamp = timestamp::now_seconds();
-        initializeDeck(game_metadata);
-        dealHoleCards(game_metadata);
+        initialize_deck(game_metadata);
+        deal_hole_cards(game_metadata);
     }
 
     public fun create_game(room_id: u64) acquires GameState {
@@ -354,11 +350,11 @@ module poker::poker_manager {
         };
 
         if (game_metadata.stage == STAGE_PREFLOP) {
-            dealCommunityCards(game_metadata, 3);
+            deal_community_cards(game_metadata, 3);
         } else if (game_metadata.stage == STAGE_FLOP) {
-            dealCommunityCards(game_metadata, 1);
+            deal_community_cards(game_metadata, 1);
         } else if (game_metadata.stage == STAGE_TURN) {
-            dealCommunityCards(game_metadata, 1);
+            deal_community_cards(game_metadata, 1);
         };
 
         game_metadata.stage = (game_metadata.stage + 1) % 5;
@@ -406,7 +402,10 @@ module poker::poker_manager {
 
         assert!(amount >= game_metadata.stake, EINSUFFICIENT_BALANCE_FOR_STAKE);
         
-        aptos_account::transfer(from, @poker, amount); 
+        aptos_account::transfer(from, @poker, amount);
+
+        debug::print(&string::utf8(b"Now the admin account has: ")); 
+        debug::print(&coin::balance<AptosCoin>(@poker));
 
         vector::push_back(&mut game_metadata.players, Player{id: addr, hand: vector::empty(), status: STATUS_ACTIVE, current_bet: 0});
         game_metadata.pot = game_metadata.pot + amount;
@@ -427,31 +426,102 @@ module poker::poker_manager {
 
     public entry fun populate_card_values(from: &signer, game_id: u64, suit_strings: vector<string::String>, value_strings: vector<string::String>) acquires GameState {
         assert_is_initialized();
+        assert_is_owner(signer::address_of(from));
 
         let gamestate = borrow_global_mut<GameState>(@poker);
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
+        let allCards = vector::empty<Card>();
+        vector::append<Card>(&mut allCards, game_metadata.deck);
+        vector::append<Card>(&mut allCards, game_metadata.community);
+        
+        // Append all players' hands
         let i = 0;
-        while (i < 52) {
-            let card = vector::borrow_mut(&mut game_metadata.deck, i);
-            card.suit_string = *string::bytes(vector::borrow(&suit_strings, i));
-            card.value_string = *string::bytes(vector::borrow(&value_strings, i));
+        while (i < vector::length(&game_metadata.players)) {
+            let player = vector::borrow(&game_metadata.players, i);
+            vector::append<Card>(&mut allCards, player.hand);
             i = i + 1;
         };
 
+        debug::print(&string::utf8(b"Length of allCards: "));
+        debug::print(&vector::length(&allCards));
+
+        let j: u64 = 0;
+        while (j < 52) {
+            let (isInDeck, deckIndex) = vector::find<Card>(&game_metadata.deck, |obj| {
+                let card: &Card = obj;
+                card.cardId == (j as u8)
+            });
+            let (isInCommunity, communityIndex) = vector::find<Card>(&game_metadata.community, |obj| {
+                let card: &Card = obj;
+                card.cardId == (j as u8)
+            });
+            if (isInDeck) {
+                debug::print(&string::utf8(b"Found in deck"));
+                let card = vector::borrow_mut(&mut game_metadata.deck, deckIndex);
+                card.suit_string = *string::bytes(vector::borrow(&suit_strings, j));
+                card.value_string = *string::bytes(vector::borrow(&value_strings, j));
+            } else if (isInCommunity) {
+                debug::print(&string::utf8(b"Found in community"));
+                debug::print(&j);
+                debug::print(&string::utf8(b"Commuity index: "));
+                debug::print(&communityIndex);
+                let card = vector::borrow_mut(&mut game_metadata.community, communityIndex);
+                card.suit_string = *string::bytes(vector::borrow(&suit_strings, j));
+                card.value_string = *string::bytes(vector::borrow(&value_strings, j));
+            } else {
+                let l = 0;
+                while (l < vector::length(&game_metadata.players)) {
+                    let player = vector::borrow_mut(&mut game_metadata.players, (l as u64));
+                    let (isInHand, handIndex) = vector::find<Card>(&player.hand, |obj| {
+                        let card: &Card = obj;
+                        card.cardId == (j as u8)
+                    });
+                    if (isInHand) {
+                        let card = vector::borrow_mut<Card>(&mut player.hand, handIndex);
+                        card.suit_string = *string::bytes(vector::borrow(&suit_strings, j));
+                        card.value_string = *string::bytes(vector::borrow(&value_strings, j));
+                    };
+                    l = l + 1;
+                };
+            };
+            j = j + 1;
+        };
+
+        debug::print(&string::utf8(b"Game metadata: "));
+        debug::print(game_metadata);
+
         // Find winner and end game
-        let winner = get_game_winner(game_metadata);
-        let winner_index = winner.player_index;
-        let player = vector::borrow(&game_metadata.players, winner_index);
+        let winners = get_game_winners(game_metadata);
+        debug::print(&string::utf8(b"Winners: "));
+        debug::print(&winners);
 
-        game_metadata.winner = player.id;
         game_metadata.state = GAMESTATE_CLOSED;
-        //create_game(game_metadata.room_id);
+        
+        let k = 0;
+        while (k < vector::length(&winners)) {
+            let winner = vector::borrow(&winners, k);
+            let players = game_metadata.players;
+            
+            let winner_index = winner.player_index;
 
-        let winner_addr = vector::borrow(&game_metadata.players, winner.player_index).id;
-        aptos_account::transfer(from, winner_addr, game_metadata.pot);
+            let winner_addr = vector::borrow(&game_metadata.players, winner_index).id;
+
+            vector::push_back(&mut game_metadata.winners, winner_addr);
+
+            // pot divided by number of winners
+            let pot_divided = fixed_point64::multiply_u128((game_metadata.pot as u128), fixed_point64::create_from_rational(1, (vector::length(&winners) * 2 as u128)));
+            debug::print(&string::utf8(b"Pot divided: "));
+            debug::print(&pot_divided);
+            debug::print(&string::utf8(b"Admin balance: "));
+            debug::print(&coin::balance<AptosCoin>(@poker));
+            aptos_account::transfer(from, winner_addr, (pot_divided as u64));
+            k = k + 1;
+        };
+
+        game_metadata.state = GAMESTATE_CLOSED;
     }
 
     public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
@@ -547,12 +617,9 @@ module poker::poker_manager {
             player.status = STATUS_ALL_IN;
         };
 
+        aptos_account::transfer(from, @poker, amount);
         game_metadata.last_action_timestamp = timestamp::now_seconds();
 
-        let nextPlayer = vector::borrow(&game_metadata.players, (player_index + 1) % vector::length(&game_metadata.players));
-        game_metadata.turn = nextPlayer.id;
-        game_metadata.currentPlayerIndex = ((player_index + 1) % vector::length(&game_metadata.players) as u8);
-        
         let activePlayers = 0;
         let lastActivePlayerIndex = 0;
         let i = 0;
@@ -566,12 +633,22 @@ module poker::poker_manager {
         };
 
         if (activePlayers == 1) {
-            game_metadata.winner = vector::borrow(&game_metadata.players, (lastActivePlayerIndex as u64)).id;
+            game_metadata.winners = vector[vector::borrow(&game_metadata.players, (lastActivePlayerIndex as u64)).id];
             game_metadata.state = GAMESTATE_CLOSED;
             //create_game(game_metadata.room_id);
         } else if (activePlayers == 0) {
             game_metadata.state = GAMESTATE_CLOSED;
             //create_game(game_metadata.room_id);
+        };
+
+        // Skip folded players
+        let nextPlayer = vector::borrow(&game_metadata.players, ((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players));
+        game_metadata.turn = nextPlayer.id;
+        game_metadata.currentPlayerIndex = (((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players) as u8);
+        while (nextPlayer.status == STATUS_FOLDED) {
+            nextPlayer = vector::borrow(&game_metadata.players, ((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players));
+            game_metadata.turn = nextPlayer.id;
+            game_metadata.currentPlayerIndex = (((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players) as u8);
         };
 
         let should_move_to_next_stage = false;
@@ -629,7 +706,7 @@ module poker::poker_manager {
         }
     }
 
-    fun initializeDeck(game: &mut GameMetadata) {
+    fun initialize_deck(game: &mut GameMetadata) {
         
         // Gamedeck will be a vector of 52 cards, with ids from 0 to 51
         // value_string and suit_string will not be used for now, only when evaluating winner
@@ -646,7 +723,7 @@ module poker::poker_manager {
         game.seed = randomness::u8_range(0, 51);
     }
 
-    fun dealHoleCards(game_metadata: &mut GameMetadata) {
+    fun deal_hole_cards(game_metadata: &mut GameMetadata) {
         let i = 0;
         let players_len = vector::length(&game_metadata.players);
         while (i < players_len) {
@@ -658,7 +735,7 @@ module poker::poker_manager {
     }
 
 
-    fun dealCommunityCards(game_metadata: &mut GameMetadata, number: u8) {
+    fun deal_community_cards(game_metadata: &mut GameMetadata, number: u8) {
         let deck_size = (vector::length(&game_metadata.deck) as u8);
         assert!(deck_size >= number, EINVALID_MOVE);
 
@@ -671,7 +748,7 @@ module poker::poker_manager {
         }
     }
 
-    fun evaluateHandDetails(cards: &vector<Card>): (vector<u8>, u8, u8) {
+    fun evaluate_hand_details(cards: &vector<Card>): (vector<u8>, u8, u8) {
         let straight: bool = false;
         let handType: vector<u8> = b"High Card";
         let _flush: bool = false;
@@ -792,14 +869,14 @@ module poker::poker_manager {
         (handType, handRank, highestValue)
     }
 
-    fun evaluateHand(communityCards: &vector<Card>, playerCards: &vector<Card>): (vector<u8>, u8, u8) {
+    fun evaluate_hand(communityCards: &vector<Card>, playerCards: &vector<Card>): (vector<u8>, u8, u8) {
         let newCards = vector::empty<Card>();
         vector::append<Card>(&mut newCards, *communityCards);
         vector::append<Card>(&mut newCards, *playerCards);
-        evaluateHandDetails(&newCards)
+        evaluate_hand_details(&newCards)
     }
 
-    fun get_game_winner(game_metadata: &mut GameMetadata): Evaluation {
+    fun get_game_winners(game_metadata: &mut GameMetadata): vector<Evaluation> {
         let players_len = vector::length(&game_metadata.players);
         let evaluations: vector<Evaluation> = vector::empty();
 
@@ -807,7 +884,8 @@ module poker::poker_manager {
         while (i < players_len) {
             let player = vector::borrow(&game_metadata.players, i);
             if (player.status == STATUS_ACTIVE) {
-                let (hand_type, hand_rank, highest_value) = evaluateHand(&game_metadata.community, &player.hand);
+                let (hand_type, hand_rank, highest_value) = evaluate_hand(&game_metadata.community, &player.hand);
+
                 let evaluation = Evaluation {
                     player_index: i,
                     hand_rank: hand_rank,
@@ -819,33 +897,32 @@ module poker::poker_manager {
             i = i + 1;
         };
 
-
         assert!(vector::length(&evaluations) > 0, EINVALID_GAME);
 
-        let winner_index: u64 = vector::borrow(&evaluations, 0).player_index;
-        let highest_rank: u8 = vector::borrow(&evaluations, 0).hand_rank;
-        let highest_comparison_value: u8 = vector::borrow(&evaluations, 0).comparison_value;
-        let highest_hand_type: vector<u8> = vector::borrow(&evaluations, 0).hand_type;
+        // Initialize tracking for potential winners
+        let winners: vector<Evaluation> = vector::empty();
+        let highest_rank: u8 = 0;
+        let highest_comparison_value: u8 = 0;
 
-        let j = 1;
+        let j = 0;
         while (j < vector::length(&evaluations)) {
             let evaluation = vector::borrow(&evaluations, j);
             if (evaluation.hand_rank > highest_rank || (evaluation.hand_rank == highest_rank && evaluation.comparison_value > highest_comparison_value)) {
-                winner_index = evaluation.player_index;
+                // Clear previous winners and update highest values
+                winners = vector::empty();
+                vector::push_back(&mut winners, *evaluation);
                 highest_rank = evaluation.hand_rank;
                 highest_comparison_value = evaluation.comparison_value;
-                highest_hand_type = evaluation.hand_type;
+            } else if (evaluation.hand_rank == highest_rank && evaluation.comparison_value == highest_comparison_value) {
+                // Add to winners in case of a draw
+                vector::push_back(&mut winners, *evaluation);
             };
             j = j + 1;
         };
 
-        Evaluation {
-            player_index: winner_index,
-            hand_rank: highest_rank,
-            comparison_value: highest_comparison_value,
-            hand_type: highest_hand_type,
-        }
+        winners
     }
+
 
     /*
     =================================
@@ -935,7 +1012,7 @@ module poker::poker_manager {
             assert!(game_metadata.stage == STAGE_FLOP, EINVALID_GAME);
         };
 
-        {
+        /* {
             let gamestate = borrow_global_mut<GameState>(@poker);
             let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
@@ -950,16 +1027,16 @@ module poker::poker_manager {
                 } else if (i == 1) {
                     player.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}, Card{cardId: 3, suit_string: b"spades", value_string: b"2"}];
                 } else if (i == 2) {
-                    player.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"clubs", value_string: b"10"}];
+                    player.hand = vector[Card{cardId: 4, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 5, suit_string: b"clubs", value_string: b"10"}];
                 } else if (i == 3) {
-                    player.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
+                    player.hand = vector[Card{cardId: 6, suit_string: b"spades", value_string: b"3"}, Card{cardId: 7, suit_string: b"spades", value_string: b"jack"}];
                 };
                 // Add more conditions as necessary for other players
 
                 i = i + 1;
             };
             
-        };
+        }; */
 
         {
             perform_action(account3, game_id, RAISE, 8000000);
@@ -1002,19 +1079,41 @@ module poker::poker_manager {
 
             assert!(game_metadata.stage == STAGE_SHOWDOWN, EINVALID_GAME);
             assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
+        };
 
-            game_metadata.community = vector[
-                Card{cardId: 0, suit_string: b"hearts", value_string: b"9"},
-                Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"},
-                Card{cardId: 2, suit_string: b"clubs", value_string: b"7"},
-                Card{cardId: 3, suit_string: b"spades", value_string: b"2"},
-                Card{cardId: 4, suit_string: b"hearts", value_string: b"8"},
-            ];
-            
-            let winner = get_game_winner(&mut game_metadata);
-            let winner_index = winner.player_index;
-
-            assert!(winner_index == 1, EINVALID_GAME);
+            populate_card_values(admin, game_id,
+        vector[
+            string::utf8(b"clubs"),    string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"diamonds"),
+            string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"clubs"),
+            string::utf8(b"clubs"),    string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"clubs"),
+            string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),   string::utf8(b"spades"),
+            string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"spades"),
+            string::utf8(b"hearts"),   string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"spades"),
+            string::utf8(b"hearts"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),   string::utf8(b"spades"),
+            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
+            string::utf8(b"clubs"),    string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
+            string::utf8(b"spades"),   string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),
+            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"clubs"),
+            string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"diamonds"),
+            string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"hearts"),   string::utf8(b"diamonds"),
+        ],
+        vector[
+            string::utf8(b"jack"),  string::utf8(b"6"),     string::utf8(b"8"),    string::utf8(b"2"),    string::utf8(b"10"),   string::utf8(b"7"),
+            string::utf8(b"3"),     string::utf8(b"4"),     string::utf8(b"5"),    string::utf8(b"10"),   string::utf8(b"8"),    string::utf8(b"king"),
+            string::utf8(b"queen"), string::utf8(b"8"),     string::utf8(b"2"),    string::utf8(b"9"),    string::utf8(b"king"), string::utf8(b"3"),
+            string::utf8(b"5"),     string::utf8(b"8"),     string::utf8(b"ace"),  string::utf8(b"king"), string::utf8(b"6"),    string::utf8(b"jack"),
+            string::utf8(b"10"),    string::utf8(b"ace"),   string::utf8(b"5"),    string::utf8(b"5"),    string::utf8(b"4"),    string::utf8(b"7"),
+            string::utf8(b"queen"), string::utf8(b"6"),     string::utf8(b"3"),    string::utf8(b"2"),    string::utf8(b"king"), string::utf8(b"4"),
+            string::utf8(b"2"),     string::utf8(b"ace"),   string::utf8(b"9"),    string::utf8(b"jack"), string::utf8(b"7"),    string::utf8(b"ace"),
+            string::utf8(b"9"),     string::utf8(b"9"),     string::utf8(b"jack"), string::utf8(b"10"),   string::utf8(b"7"),    string::utf8(b"queen"),
+            string::utf8(b"6"),     string::utf8(b"queen"), string::utf8(b"3"),    string::utf8(b"4")
+        ]
+        );
+        
+        {
+            let game_metadata = get_game_metadata_by_id(game_id);
+            debug::print(&string::utf8(b"Game metadata: "));
+            debug::print(&game_metadata);
         };
 
         let user1_games = borrow_global<UserGames>(signer::address_of(account1));
@@ -1072,7 +1171,8 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2, player3, player4];
         
-        let winner = get_game_winner(&mut game_metadata);
+        let winners = get_game_winners(&mut game_metadata);
+        let winner = vector::borrow(&winners, 0);
 
         assert!(winner.player_index == 3, EINVALID_GAME);
 
@@ -1094,7 +1194,7 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 2, EINVALID_GAME);
 
@@ -1117,7 +1217,7 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 1, EINVALID_GAME);
 
@@ -1140,7 +1240,7 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2, player3, player4];
         
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 3, EINVALID_GAME);
 
@@ -1163,7 +1263,7 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 0, EINVALID_GAME);
 
@@ -1189,7 +1289,7 @@ module poker::poker_manager {
         game_metadata.players = vector[player1, player2, player3, player4];
 
 
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 2, EINVALID_GAME);
 
@@ -1215,7 +1315,7 @@ module poker::poker_manager {
         game_metadata.players = vector[player1, player2, player3, player4];
 
 
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 0, EINVALID_GAME);
 
@@ -1240,7 +1340,7 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 1, EINVALID_GAME);
 
@@ -1265,7 +1365,7 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2, player3, player4];
 
-        winner = get_game_winner(&mut game_metadata);
+        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         assert!(winner.player_index == 3, EINVALID_GAME);
     }
