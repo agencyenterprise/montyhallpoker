@@ -8,23 +8,23 @@ export type RevealedHand = Record<number, Hand>;
 export type Hand = { suit: string; value: string };
 export type PrivateHand = { suit: number; value: number };
 export type UserSignedMessage = { signedMessage: string; message: string };
+export type GameMappingDB = { gameId: number; mapping: Record<number, Hand> };
 
 const getGameMapping = async (gameId: number) => {
     const { db } = await connectToDatabase();
     const mappings = db.collection("mappings");
-    return await mappings.findOne({ gameId });
+    return await mappings.findOne({ gameId })
 };
 
 const insertCardMapping = async (
     gameId: number,
-    valueMapping: CardValueMapping,
-    suitMapping: SuitValueMapping
-) => {
+    mapping: Record<number, Hand>
+): Promise<any> => {
     const gameMapping = await getGameMapping(gameId);
     if (!gameMapping) {
         const { db } = await connectToDatabase();
         const mappings = db.collection("mappings");
-        return await mappings.insertOne({ gameId, valueMapping, suitMapping });
+        return await mappings.insertOne({ gameId, mapping });
     }
     return gameMapping;
 };
@@ -49,17 +49,16 @@ const revealMappingFromDB = async (
     if (!gameMapping) {
         throw new Error("No game found!");
     }
-    const { valueMapping, suitMapping } = gameMapping;
-    const parsedCards = transformValueSuitMappingToSequencialMapping(valueMapping, suitMapping);
-    const privateCard = suit == value ? parsedCards[suit] : parsedCards[suit * 13 + value];
+    const { mapping } = gameMapping;
+    const privateCard = suit == value ? mapping[suit] : mapping[suit * 13 + value];
     return { value: privateCard.value, suit: privateCard.suit };
 };
 function secureRandom(min: number, max: number) {
     return crypto.randomInt(min, max + 1);
 }
 
-const generateCardMappings = async () => {
-    function shuffleArray(array: string[]) {
+const generateCardMappings = async (): Promise<Record<number, Hand>> => {
+    function shuffleArray(array: any) {
         for (let i = array.length - 1; i > 0; i--) {
             const j = secureRandom(0, i);
             [array[i], array[j]] = [array[j], array[i]]; // Swap elements
@@ -95,12 +94,16 @@ const generateCardMappings = async () => {
     for (let i = 0; i < suits.length; i++) {
         suitMapping[i] = suits[i];
     }
-    return { valueMapping, suitMapping };
+    const cardMapping = transformValueSuitMappingToSequencialMapping(valueMapping, suitMapping);
+    const mapping = Object.values(cardMapping).map((v) => ({ suit: v.suit, value: v.value }));
+    shuffleArray(mapping);
+
+    return mapping.reduce((acc, v, i) => ({ ...acc, [i]: v }), {});
 };
 
 export const createCardMapping = async (gameId: number) => {
-    const { valueMapping, suitMapping } = await generateCardMappings();
-    return await insertCardMapping(gameId, valueMapping, suitMapping);
+    const mapping = await generateCardMappings();
+    return await insertCardMapping(gameId, mapping);
 };
 
 const extractGamePlayers = (game: GameState) => {
