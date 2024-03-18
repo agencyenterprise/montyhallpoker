@@ -10,7 +10,7 @@ export type PrivateHand = { suit: number; value: number };
 export type UserSignedMessage = { signedMessage: string; message: string };
 export type GameMappingDB = { gameId: number; mapping: Record<number, Hand> };
 
-const getGameMapping = async (gameId: number) => {
+export const getGameMapping = async (gameId: number) => {
     const { db } = await connectToDatabase();
     const mappings = db.collection("mappings");
     return await mappings.findOne({ gameId })
