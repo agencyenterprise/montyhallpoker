@@ -3,8 +3,7 @@ import { getAptosClient } from "../src/utils/aptosClient";
 type Maybe<T> = T | null;
 
 const client = getAptosClient();
-export const CONTRACT_ADDRESS =
-  process.env.CONTRACT_ADDRESS || "0xe4ab044df91caf41e1b13ea1a2d57a72f5d9a3b8edb52755046e3f5d3d3082d7";
+export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 type LastRaiser = {
   vec: string[];
 };

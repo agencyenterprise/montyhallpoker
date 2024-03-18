@@ -6,7 +6,7 @@ import classnames from "classnames";
 import Image from "next/image";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useRouter } from "next/navigation";
-import { CONTRACT_ADDRESS, getGameByRoomId } from "../../controller/contract";
+import { getGameByRoomId } from "../../controller/contract";
 
 export const AVAILABLE_ROOMS = [
   "1",
@@ -22,6 +22,8 @@ export const AVAILABLE_ROOMS = [
   "11",
   "12",
 ];
+
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 
 const aptosClient = getAptosClient();
 
@@ -88,6 +90,7 @@ function GameRoom({ roomId, onEnterRoom }: GameRoomProps) {
     try {
       const wallet = getAptosWallet();
       const account = await wallet?.account();
+      console.log(process.env)
       const response = await signAndSubmitTransaction({
         sender: account.address,
 
@@ -108,6 +111,7 @@ function GameRoom({ roomId, onEnterRoom }: GameRoomProps) {
 
   const pullRoomData = async () => {
     const game = await getGameByRoomId(roomId);
+    console.log("Room data", game)
     const stakeOctas = Number(game?.stake || 0);
     const stakeAptos = stakeOctas / 10 ** 8;
     const maxPotAptos = (Number(game?.pot) || 0) / 10 ** 8;

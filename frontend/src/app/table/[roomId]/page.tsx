@@ -285,7 +285,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
         </Button>
       </div>
       <Button
-        onClick={() => performAction(ACTIONS.RAISE, Number(gameState?.stake))}
+        onClick={() => performAction(ACTIONS.RAISE, raiseValue)}
       >
         Raise
       </Button>
