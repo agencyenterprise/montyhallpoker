@@ -43,6 +43,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   const { roomId } = params;
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState(null);
+  const [meIndex, setMeIndex] = useState(0);
   const [currentPlayer, setCurrentPlayer] = useState(null);
   const [playerOne, setPlayerOne] = useState(null);
   const [playerTwo, setPlayerTwo] = useState(null);
@@ -54,12 +55,15 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [stop, setStop] = useState(false);
   const controller = new AbortController();
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
     setGameState(game);
-    console.log(game);
+    const mePlayer = gameState?.players.find((player) => player.id === me)!;
+    const mePlayerIndex = gameState?.players.indexOf(mePlayer);
+    setMeIndex(mePlayerIndex || 0);
   };
   usePollingEffect(async () => await gameWorker(), [], {
     interval: 2000,
@@ -116,6 +120,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         signedMessage: response.signature,
       },
     };
+
     const res = await fetch(`/api/reveal/private`, {
       method: "POST",
       body: JSON.stringify(revealPayload),
@@ -123,6 +128,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         "Content-Type": "application/json",
       },
     });
+
     const data = await res.json();
     if (data.message == "OK") {
       console.log(data);
@@ -136,13 +142,13 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
           <PlayerBanner
             isMe={false}
-            name="Player 1"
+            name={`Player ${((meIndex + 1) % 4) + 1}`}
             stack={1000}
             position={1}
           />
           <PlayerBanner
             isMe={false}
-            name="Player 2"
+            name={`Player ${((meIndex + 2) % 4) + 1}`}
             stack={1000}
             position={1}
           />
@@ -150,14 +156,14 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
           <PlayerBanner
             isMe={true}
-            name="Player 3"
+            name={`Player ${meIndex + 1}`}
             stack={1000}
             position={1}
             cards={userCards}
           />
           <PlayerBanner
             isMe={false}
-            name="Player 4"
+            name={`Player ${((meIndex + 3) % 4) + 1}`}
             stack={1000}
             position={1}
           />
@@ -168,7 +174,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           ))}
         </div>
         <div className="absolute -bottom-20 flex gap-x-4">
-          <ActionButtons gameState={gameState!} />
+          <ActionButtons meIndex={meIndex} gameState={gameState!} />
         </div>
         <div className="absolute right-40 h-full flex justify-center items-center text-white">
           Pot: {currentPot.toFixed(2)}
@@ -181,11 +187,11 @@ export default function PokerGameTable({ params }: { params: any }) {
 
 interface ActionButtonsProps {
   gameState: Maybe<GameState>;
+  meIndex: number;
 }
 
-function ActionButtons({ gameState }: ActionButtonsProps) {
+function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   const { signAndSubmitTransaction } = useWallet();
-  const [raiseValue, setRaiseValue] = useState(0);
 
   // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
   const performAction = async (action: number, amount: number) => {
@@ -213,6 +219,10 @@ function ActionButtons({ gameState }: ActionButtonsProps) {
       console.error(error);
     }
   };
+
+  if (meIndex !== gameState?.currentPlayerIndex) {
+    return <div></div>;
+  }
 
   return (
     <div className="flex flex-col gap-y-4">
