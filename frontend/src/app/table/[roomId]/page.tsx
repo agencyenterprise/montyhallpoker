@@ -64,6 +64,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     const mePlayer = gameState?.players.find((player) => player.id === me)!;
     const mePlayerIndex = gameState?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
+    console.log("oie", mePlayerIndex);
   };
   usePollingEffect(async () => await gameWorker(), [], {
     interval: 2000,
@@ -192,6 +193,10 @@ interface ActionButtonsProps {
 
 function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   const { signAndSubmitTransaction } = useWallet();
+  const [raiseValue, setRaiseValue] = useState<number>(
+    Number(gameState?.stake) || 0
+  );
+  const maxValue = Number();
 
   // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
   const performAction = async (action: number, amount: number) => {
@@ -226,15 +231,42 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
 
   return (
     <div className="flex flex-col gap-y-4">
+      <div className="flex gap-x-2 h-fit">
+        <Button
+          disabled={raiseValue <= 0}
+          onClick={() =>
+            setRaiseValue((prev) => prev - Number(gameState?.stake))
+          }
+        >
+          -
+        </Button>
+        <input
+          className="text-center bg-[#0F172A] text-white w-[100px] h-full rounded-[10px] border border-cyan-400"
+          value={Number(raiseValue / 10 ** 8).toFixed(2)}
+        />
+        <Button
+          onClick={() =>
+            setRaiseValue((prev) => prev + Number(gameState?.stake))
+          }
+        >
+          +
+        </Button>
+      </div>
       <Button
         onClick={() => performAction(ACTIONS.RAISE, Number(gameState?.stake))}
       >
         Raise
       </Button>
-      <div className="flex gap-x-4 ">
-        <Button onClick={() => performAction(ACTIONS.FOLD, 0)}>Fold</Button>
+      <div className="flex gap-x-4 w-full">
+        <Button
+          className="w-full"
+          onClick={() => performAction(ACTIONS.FOLD, 0)}
+        >
+          Fold
+        </Button>
         {Number(gameState?.current_bet) > 0 && (
           <Button
+            className="w-full"
             onClick={() =>
               performAction(ACTIONS.CALL, Number(gameState?.stake))
             }
@@ -243,7 +275,12 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
           </Button>
         )}
         {Number(gameState?.current_bet) === 0 && (
-          <Button onClick={() => performAction(ACTIONS.CHECK, 0)}>Check</Button>
+          <Button
+            className="w-full"
+            onClick={() => performAction(ACTIONS.CHECK, 0)}
+          >
+            Check
+          </Button>
         )}
       </div>
     </div>
