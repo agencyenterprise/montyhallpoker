@@ -512,7 +512,7 @@ module poker::poker_manager {
             vector::push_back(&mut game_metadata.winners, winner_addr);
 
             // pot divided by number of winners
-            let pot_divided = fixed_point64::multiply_u128((game_metadata.pot as u128), fixed_point64::create_from_rational(1, (vector::length(&winners) * 2 as u128)));
+            let pot_divided = fixed_point64::multiply_u128((game_metadata.pot as u128), fixed_point64::create_from_rational(1, (vector::length(&winners) as u128)));
             debug::print(&string::utf8(b"Pot divided: "));
             debug::print(&pot_divided);
             debug::print(&string::utf8(b"Admin balance: "));
@@ -579,6 +579,11 @@ module poker::poker_manager {
 
         debug::print(&string::utf8(b"Current bet: "));
         debug::print(&game_metadata.starter);
+
+        debug::print(&string::utf8(b"Current turn: "));
+        debug::print(&game_metadata.turn);
+        debug::print(&string::utf8(b"Who is attempting: "));
+        debug::print(&addr);
 
         assert!(game_metadata.turn == addr, EINSUFFICIENT_PERMISSIONS);
 
@@ -1041,11 +1046,11 @@ module poker::poker_manager {
         {
             perform_action(account3, game_id, RAISE, 8000000);
             perform_action(account4, game_id, RAISE, 13000000);
-            perform_action(account1, game_id, CALL, 13000000);
+            perform_action(account1, game_id, FOLD, 13000000);
             perform_action(account2, game_id, RAISE, 18000000);
             perform_action(account3, game_id, CALL, 18000000);
             perform_action(account4, game_id, CALL, 18000000);
-            perform_action(account1, game_id, CALL, 18000000);
+            //perform_action(account1, game_id, CALL, 18000000);
 
             let game_metadata = get_game_metadata_by_id(game_id);
 
@@ -1056,11 +1061,11 @@ module poker::poker_manager {
         {
             perform_action(account3, game_id, CHECK, 0);
             perform_action(account4, game_id, CHECK, 0);
-            perform_action(account1, game_id, CHECK, 0);
+            /* perform_action(account1, game_id, CHECK, 0); */
             perform_action(account2, game_id, RAISE, 10000000);
             perform_action(account3, game_id, CALL, 10000000);
             perform_action(account4, game_id, CALL, 10000000);
-            perform_action(account1, game_id, CALL, 10000000);
+            /* perform_action(account1, game_id, CALL, 10000000); */
 
             let game_metadata = get_game_metadata_by_id(game_id);
 
@@ -1071,7 +1076,7 @@ module poker::poker_manager {
         {
             perform_action(account3, game_id, RAISE, 5000000);
             perform_action(account4, game_id, RAISE, 10000000);
-            perform_action(account1, game_id, CALL, 10000000);
+            /* perform_action(account1, game_id, CALL, 10000000); */
             perform_action(account2, game_id, CALL, 10000000);
             perform_action(account3, game_id, CALL, 10000000);
 
