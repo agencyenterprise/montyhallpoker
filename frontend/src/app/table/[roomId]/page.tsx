@@ -72,7 +72,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
     console.log(game?.community || []);
-    await revealComunityCards();
+    await revealComunityCards(game?.id);
     //console.log("oie", mePlayerIndex);
     //console.log(me)
   };
@@ -101,10 +101,13 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
   }, [gameStarted, gameState]);
 
-  const revealComunityCards = async () => {
+  const revealComunityCards = async (gameId: string) => {
+    if (!gameId) {
+      return;
+    }
     const response = await fetch(`/api/reveal/community`, {
       method: "POST",
-      body: JSON.stringify({ gameId: Number(gameState?.id) }),
+      body: JSON.stringify({ gameId: Number(gameId) }),
       headers: {
         "Content-Type": "application/json",
       },
