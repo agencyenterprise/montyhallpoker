@@ -98,10 +98,10 @@ export default function PokerGameTable({ params }: { params: any }) {
     const wallet = getAptosWallet();
     try {
       const account = await wallet?.account();
-
+      console.log("Not null address: ", account.address)
       if (account.address) {
         setMe(account.address);
-        console.log(account.address);
+
         setGameStarted(true);
         setCurrentPot(Number(gameState?.pot) / 10 ** 8);
       }
