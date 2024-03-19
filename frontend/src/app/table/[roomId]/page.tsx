@@ -4,10 +4,18 @@ import classnames from "classnames";
 import Image from "next/image";
 import { cn } from "@/utils/styling";
 import { useEffect, useState } from "react";
-import { GameState, getGameByRoomId } from "../../../../controller/contract";
+import {
+  CONTRACT_ADDRESS,
+  GameState,
+  GameStatus,
+  getGameByRoomId,
+} from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
-
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { getAptosClient } from "../../../utils/aptosClient";
+import Button from "@/components/Button";
+import { parseAddress } from "@/utils/address";
 const getAptosWallet = (): any => {
   if ("aptos" in window) {
     return window.aptos;
@@ -16,44 +24,142 @@ const getAptosWallet = (): any => {
   }
 };
 
+const ACTIONS = {
+  FOLD: 0,
+  CHECK: 1,
+  CALL: 2,
+  RAISE: 3,
+  ALL_IN: 4,
+};
+
+const aptosClient = getAptosClient();
+
+interface PlayerCards {
+  suit: string;
+  value: string;
+}
+
 export default function PokerGameTable({ params }: { params: any }) {
   const { roomId } = params;
   const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState(null);
+  const [meIndex, setMeIndex] = useState(0);
   const [currentPlayer, setCurrentPlayer] = useState(null);
   const [playerOne, setPlayerOne] = useState(null);
   const [playerTwo, setPlayerTwo] = useState(null);
   const [playerThree, setPlayerThree] = useState(null);
   const [playerFour, setPlayerFour] = useState(null);
-  const [communityCards, setCommunityCards] = useState([]);
+  const [communityCards, setCommunityCards] = useState<PlayerCards[]>([]);
+  const [currentPot, setCurrentPot] = useState(0);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
-  const [stop, setStop] = useState(false)
+  const [userCards, setUserCards] = useState<PlayerCards[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [stop, setStop] = useState(false);
   const controller = new AbortController();
   const gameWorker = async () => {
-    const game = await getGameByRoomId(roomId)
-    setGameState(game)
-  }
-  usePollingEffect(
-    async () => await gameWorker(),
-    [],
-    { interval: 2000, stop, controller }
-  )
+    const game = await getGameByRoomId(roomId);
+    const wallet = getAptosWallet();
+    const { address } = await wallet?.account();
+    const mePlayer = game?.players.find(
+      (player) => parseAddress(player.id) === parseAddress(address)
+    )!;
+    const mePlayerIndex = game?.players.indexOf(mePlayer);
+    setMeIndex(mePlayerIndex || 0);
+    setGameState(game);
+    await revealComunityCards(game!.id!);
+  };
+
+  usePollingEffect(async () => await gameWorker(), [], {
+    interval: 2000,
+    stop,
+    controller,
+  });
   useEffect(() => {
     console.log(gameState);
-  }, [gameState])
+  }, [gameState]);
+
   useEffect(() => {
-    retrieveGameState()
-  });
+    retrieveGameState();
+  }, [gameState]);
+
+  useEffect(() => {
+    if (
+      gameState &&
+      gameState?.state === GameStatus.INPROGRESS &&
+      !handRevealed
+    ) {
+      revealCurrentUserCard();
+      setHandRevealed(true);
+    }
+  }, [gameStarted, gameState]);
+
+  const revealComunityCards = async (gameId: string) => {
+    if (!gameId) {
+      return;
+    }
+    const response = await fetch(`/api/reveal/community`, {
+      method: "POST",
+      body: JSON.stringify({ gameId: Number(gameId) }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await response.json();
+    if (data.message == "OK") {
+      setCommunityCards(data.communityCards);
+    }
+  };
 
   const retrieveGameState = async (): Promise<void> => {
     const wallet = getAptosWallet();
     try {
       const account = await wallet?.account();
-      setMe(account.address);
+      if (account.address) {
+        setMe(account.address);
+
+        setGameStarted(true);
+        setCurrentPot(Number(gameState?.pot) / 10 ** 8);
+      }
     } catch (error) {
       // { code: 4001, message: "User rejected the request."}
+      console.error(error);
     }
     setLoaded(true);
+  };
+
+  const revealCurrentUserCard = async () => {
+    const message = "Sign this to reveal your cards";
+    const nonce = Date.now().toString();
+    const aptosClient = getAptosWallet();
+    const response = await aptosClient.signMessage({
+      message,
+      nonce,
+    });
+    const { publicKey } = await aptosClient.account();
+
+    const revealPayload = {
+      gameId: +gameState!.id,
+      userPubKey: publicKey,
+      userSignedMessage: {
+        message: response.fullMessage,
+        signedMessage: response.signature,
+      },
+    };
+
+    const res = await fetch(`/api/reveal/private`, {
+      method: "POST",
+      body: JSON.stringify(revealPayload),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    const data = await res.json();
+    if (data.message == "OK") {
+      setUserCards(data.userCards);
+    }
   };
 
   return (
@@ -62,33 +168,50 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
           <PlayerBanner
             isMe={false}
-            name="Player 1"
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={(meIndex + 1) % 4}
             stack={1000}
-            position={1}
+            position={2}
           />
           <PlayerBanner
             isMe={false}
-            name="Player 2"
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={(meIndex + 2) % 4}
             stack={1000}
             position={1}
           />
         </div>
         <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
-          <PlayerBanner isMe={true} name="Player 3" stack={1000} position={1} />
+          <PlayerBanner
+            isMe={true}
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={meIndex % 4}
+            stack={1000}
+            position={0}
+            cards={userCards}
+          />
           <PlayerBanner
             isMe={false}
-            name="Player 4"
+            currentIndex={gameState?.currentPlayerIndex || 0}
+            playerIndex={(meIndex + 3) % 4}
             stack={1000}
-            position={1}
+            position={3}
           />
         </div>
         <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
           {communityCards.map((card, index) => (
-            <Card valueString={card} size="large" key={index} />
+            <Card
+              valueString={`${card.suit}_${card.value}`}
+              size="large"
+              key={index}
+            />
           ))}
         </div>
         <div className="absolute -bottom-20 flex gap-x-4">
-          <ActionButtons />
+          <ActionButtons meIndex={meIndex} gameState={gameState!} />
+        </div>
+        <div className="absolute right-40 h-full flex justify-center items-center text-white">
+          Pot: {currentPot.toFixed(2)} APT
         </div>
         <PokerTable />
       </div>
@@ -96,38 +219,103 @@ export default function PokerGameTable({ params }: { params: any }) {
   );
 }
 
-function ActionButtons() {
+interface ActionButtonsProps {
+  gameState: Maybe<GameState>;
+  meIndex: number;
+}
+
+function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
+  const { signAndSubmitTransaction } = useWallet();
+  const [raiseValue, setRaiseValue] = useState<number>(
+    Number(gameState?.stake) || 0
+  );
+  const maxValue = Number();
+
+  // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
+  const performAction = async (action: number, amount: number) => {
+    if (!gameState?.id) {
+      return;
+    }
+
+    try {
+      const wallet = getAptosWallet();
+      const account = await wallet?.account();
+      const response = await signAndSubmitTransaction({
+        sender: account.address,
+        data: {
+          function: `${CONTRACT_ADDRESS}::poker_manager::perform_action`,
+          typeArguments: [],
+          functionArguments: [`${gameState.id}`, `${action}`, `${amount}`],
+        },
+      });
+      await aptosClient.waitForTransaction({
+        transactionHash: response.hash,
+      });
+      // Do something
+    } catch (error: any) {
+      //console.error(error);
+    }
+  };
+
+  if (meIndex !== gameState?.currentPlayerIndex) {
+    return <div></div>;
+  }
+
   return (
-    <>
-      <button
-        className={cn(
-          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
-        )}
+    <div className="flex flex-col gap-y-4">
+      <div className="flex gap-x-2 h-fit">
+        <Button
+          disabled={raiseValue <= 0}
+          onClick={() =>
+            setRaiseValue((prev) => prev - Number(gameState?.stake))
+          }
+        >
+          -
+        </Button>
+        <input
+          className="text-center bg-[#0F172A] text-white w-[100px] h-full rounded-[10px] border border-cyan-400"
+          value={Number(raiseValue / 10 ** 8).toFixed(2)}
+        />
+        <Button
+          onClick={() =>
+            setRaiseValue((prev) => prev + Number(gameState?.stake))
+          }
+        >
+          +
+        </Button>
+      </div>
+      <Button
+        onClick={() => performAction(ACTIONS.RAISE, raiseValue)}
       >
         Raise
-      </button>
-      <button
-        className={cn(
-          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
+      </Button>
+      <div className="flex gap-x-4 w-full">
+        <Button
+          className="w-full"
+          onClick={() => performAction(ACTIONS.FOLD, 0)}
+        >
+          Fold
+        </Button>
+        {Number(gameState?.current_bet) > 0 && (
+          <Button
+            className="w-full"
+            onClick={() =>
+              performAction(ACTIONS.CALL, Number(gameState?.current_bet))
+            }
+          >
+            Call
+          </Button>
         )}
-      >
-        Fold
-      </button>
-      <button
-        className={cn(
-          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
+        {Number(gameState?.current_bet) === 0 && (
+          <Button
+            className="w-full"
+            onClick={() => performAction(ACTIONS.CHECK, 0)}
+          >
+            Check
+          </Button>
         )}
-      >
-        Call
-      </button>
-      <button
-        className={cn(
-          "nes-btn is-primary py-[10px] px-[24px] bg-cyan-400 font-bold rounded-[4px]"
-        )}
-      >
-        Check
-      </button>
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -139,16 +327,27 @@ function PokerTable() {
 
 interface PlayerBannerProps {
   isMe: boolean;
-  name: string;
+  currentIndex: number;
+  playerIndex: number;
   stack: number;
+  cards?: PlayerCards[];
   position: number;
 }
-function PlayerBanner({ isMe, name, stack, position }: PlayerBannerProps) {
+function PlayerBanner({
+  isMe,
+  currentIndex,
+  playerIndex: index,
+  stack,
+  cards,
+  position,
+}: PlayerBannerProps) {
   const width = isMe ? "w-[230px]" : "w-[174px]";
+  const playerIndex = index % 4;
 
   return (
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
-      <Cards show={isMe} />
+      {playerIndex == currentIndex && <TurnToken position={position} />}
+      <Cards cards={cards} />
       <div
         className={classnames(
           "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
@@ -163,7 +362,7 @@ function PlayerBanner({ isMe, name, stack, position }: PlayerBannerProps) {
           className=""
         />
         <div className="text-white flex flex-col justify-between py-2">
-          <h1 className="font-bold text-sm">{name}</h1>
+          <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
           <div>
             <div className="flex gap-x-1 text-xs">
               <Image src="/stack-icon.svg" height="13" width="13" alt="icon" />
@@ -181,11 +380,25 @@ function PlayerBanner({ isMe, name, stack, position }: PlayerBannerProps) {
   );
 }
 
-interface CardsProps {
-  show: boolean;
+function TurnToken({ position }: { position: number }) {
+  return (
+    <div
+      className={classnames(
+        "absolute -bottom-20 rounded-full text-white font-bold border-cyan-400 border bg-slate-700 w-10 h-10 flex items-center justify-center",
+        position == 0 ? "-top-20 -left-10" : "",
+        position == 3 ? "-top-20" : ""
+      )}
+    >
+      T
+    </div>
+  );
 }
-function Cards({ show }: CardsProps) {
-  const cardPosition = show ? "left-4" : `left-10`;
+
+interface CardsProps {
+  cards?: PlayerCards[];
+}
+function Cards({ cards }: CardsProps) {
+  const cardPosition = cards?.length ? "left-4" : `left-10`;
 
   return (
     <div
@@ -195,11 +408,17 @@ function Cards({ show }: CardsProps) {
       )}
     >
       <div className="flex relative mx-auto">
-        {!show && <BackCards />}
-        {show && (
+        {!cards?.length && <BackCards />}
+        {cards?.length && (
           <div className="absolute flex gap-x-[10px] -top-10">
-            <Card valueString="clubs_king" size="large" />
-            <Card valueString="diamonds_ace" size="large" />
+            <Card
+              valueString={`${cards[0].suit}_${cards[0].value}`}
+              size="large"
+            />
+            <Card
+              valueString={`${cards[1].suit}_${cards[1].value}`}
+              size="large"
+            />
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ import { cn } from "@/utils/styling";
 interface ButtonProps extends React.HTMLAttributes<HTMLButtonElement> {
   disabled?: boolean;
   loading?: boolean;
+  className?: string;
   children: React.ReactNode;
 }
 
@@ -15,6 +16,7 @@ export default function Button({
   disabled,
   loading,
   children,
+  className,
   ...props
 }: ButtonProps) {
   if (loading) {
@@ -30,8 +32,10 @@ export default function Button({
       className={cn(
         buttonStyles,
         "hover:scale-110 cursor-pointer btn-small",
-        disabled ? "opacity-50 cursor-not-allowed" : ""
+        disabled ? "opacity-50 cursor-not-allowed" : "",
+        className
       )}
+      disabled={disabled}
       {...props}
     >
       {children}

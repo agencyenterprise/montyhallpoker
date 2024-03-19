@@ -8,3 +8,13 @@ export function padAddressIfNeeded(address: string) {
   const padding = "0".repeat(paddingNeeded);
   return `0x${padding}${address.slice(2)}`;
 }
+
+export const parseAddress = (userAddress: string) => {
+  if (userAddress.startsWith("0x0")) {
+    userAddress = userAddress.replace("0x0", "");
+  } else if (userAddress.startsWith("0x")) {
+    userAddress = userAddress.replace("0x", "");
+
+  }
+  return userAddress;
+}
