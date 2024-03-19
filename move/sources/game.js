@@ -1,4 +1,4 @@
-const readlineSync = require('/Users/jessica/.nvm/versions/node/v18.16.1/lib/node_modules/readline-sync');
+const readlineSync = require('readline-sync');
 const fs = require('fs');
 const gameStateFile = 'gameState.json';
 function saveGameState(gameState) {
@@ -154,7 +154,7 @@ function evaluateHandDetails(cardsArr) {
     let suits = {}, values = {};
     let straight = false, flush = false, highestValue = 0;
     let pairs = 0, threeOfAKind = 0, fourOfAKind = 0
-
+    let bestCombinationHighestValue = {};
     cardsArr.forEach(card => {
         if (!suits[card.suit]) suits[card.suit] = 1;
         else suits[card.suit]++;
@@ -168,16 +168,35 @@ function evaluateHandDetails(cardsArr) {
     });
 
     flush = Object.values(suits).some(count => count >= 5);
+    if (flush) {
+        bestCombinationHighestValue[6] = [highestValue]
+    }
     let consecutive = 0;
     for (let i = 0; i < 13; i++) {
         consecutive = values[i] && values[12] || values[i] ? consecutive + 1 : 0;
-        if (consecutive >= 5) straight = true;
+        if (consecutive >= 5) {
+            bestCombinationHighestValue[5] = [cardHeirarchy.indexOf(values[i])]
+            straight = true
+        };
     }
 
-    Object.values(values).forEach(count => {
-        if (count === 2) pairs++;
-        if (count === 3) threeOfAKind++;
-        if (count === 4) fourOfAKind++;
+    Object.entries(values).forEach(([value, count]) => {
+        if (count === 2) {
+            const handRank = 2;
+            bestCombinationHighestValue[handRank].push(cardHeirarchy.indexOf(value));
+            pairs++;
+
+        };
+        if (count === 3) {
+            const handRank = 4;
+            bestCombinationHighestValue[handRank].push(cardHeirarchy.indexOf(value));
+            threeOfAKind++
+        };
+        if (count === 4) {
+            const handRank = 8;
+            bestCombinationHighestValue[handRank].push(cardHeirarchy.indexOf(value));
+            fourOfAKind++
+        };
     });
 
     let handType = "High Card", handRank = 1;
@@ -196,8 +215,9 @@ const cardHeirarchy = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'qu
 
 function evaluateHand(playerId) {
     // Find the player and their current hand
-    const player = gameState.players.find(p => p.id === playerId);
-    const cardsArr = revealCard([...player.hand, ...gameState.communityCards]); // Combine player's hand with community cards
+    //const player = gameState.players.find(p => p.id === playerId);
+    const playerCards = [{ value: "7", suit: "hearts" }, { value: "queen", suit: "diamonds" }]
+    const cardsArr = [{ value: "6", suit: "spades" }, { value: "2", suit: "diamonds" }, { value: "7", suit: "diamonds" }, { value: "8", suit: "diamonds" }, { value: "10", suit: "spades" }, ...playerCards] // Combine player's hand with community cards
 
     // Pass the combined array of cards to evaluateHandDetails for evaluation
     let handEvaluation = evaluateHandDetails(cardsArr);
@@ -335,14 +355,16 @@ function startBettingRound() {
 }
 
 
-function startGame() {
-    const state = startBettingRound(); // Initiate the first betting round
-    if (!gameState.continueBetting) {
-        // Proceed to the next game stage after betting round ends
-        nextRound();
-        gameState.continueBetting = true; // Reset continueBetting for the next round
-    }
-    saveGameState(state);
-}
+// function startGame() {
+//     const state = startBettingRound(); // Initiate the first betting round
+//     if (!gameState.continueBetting) {
+//         // Proceed to the next game stage after betting round ends
+//         nextRound();
+//         gameState.continueBetting = true; // Reset continueBetting for the next round
+//     }
+//     saveGameState(state);
+// }
 
-startGame();
+// startGame();
+
+console.log(evaluateHand(1))
