@@ -1,6 +1,6 @@
 "use client";
 
-import { getAptosClient } from "@/utils/aptosClient";
+import { getAptosClient, getAptosWallet } from "@/utils/aptosClient";
 import { useEffect, useState } from "react";
 import classnames from "classnames";
 import Image from "next/image";
@@ -57,13 +57,6 @@ export default function Home() {
   );
 }
 
-const getAptosWallet = (): any => {
-  if ("aptos" in window) {
-    return window.aptos;
-  } else {
-    window.open("https://petra.app/", `_blank`);
-  }
-};
 interface GameRoomProps extends React.HTMLAttributes<HTMLButtonElement> {
   roomId: string;
   onEnterRoom: (roomId: string) => void;
@@ -90,7 +83,7 @@ function GameRoom({ roomId, onEnterRoom }: GameRoomProps) {
     try {
       const wallet = getAptosWallet();
       const account = await wallet?.account();
-      console.log(process.env)
+      console.log(process.env);
       const response = await signAndSubmitTransaction({
         sender: account.address,
 
@@ -111,7 +104,7 @@ function GameRoom({ roomId, onEnterRoom }: GameRoomProps) {
 
   const pullRoomData = async () => {
     const game = await getGameByRoomId(roomId);
-    console.log("Room data", game)
+    console.log("Room data", game);
     const stakeOctas = Number(game?.stake || 0);
     const stakeAptos = stakeOctas / 10 ** 8;
     const maxPotAptos = (Number(game?.pot) || 0) / 10 ** 8;

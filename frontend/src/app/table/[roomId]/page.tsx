@@ -13,16 +13,9 @@ import {
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { getAptosClient } from "../../../utils/aptosClient";
+import { getAptosClient, getAptosWallet } from "../../../utils/aptosClient";
 import Button from "@/components/Button";
 import { parseAddress } from "@/utils/address";
-const getAptosWallet = (): any => {
-  if ("aptos" in window) {
-    return window.aptos;
-  } else {
-    window.open("https://petra.app/", `_blank`);
-  }
-};
 
 const ACTIONS = {
   FOLD: 0,
@@ -41,21 +34,14 @@ interface PlayerCards {
 
 export default function PokerGameTable({ params }: { params: any }) {
   const { roomId } = params;
-  const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState(null);
   const [meIndex, setMeIndex] = useState(0);
-  const [currentPlayer, setCurrentPlayer] = useState(null);
-  const [playerOne, setPlayerOne] = useState(null);
-  const [playerTwo, setPlayerTwo] = useState(null);
-  const [playerThree, setPlayerThree] = useState(null);
-  const [playerFour, setPlayerFour] = useState(null);
   const [communityCards, setCommunityCards] = useState<PlayerCards[]>([]);
   const [currentPot, setCurrentPot] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [stop, setStop] = useState(false);
   const controller = new AbortController();
   const gameWorker = async () => {
@@ -126,7 +112,6 @@ export default function PokerGameTable({ params }: { params: any }) {
       // { code: 4001, message: "User rejected the request."}
       console.error(error);
     }
-    setLoaded(true);
   };
 
   const revealCurrentUserCard = async () => {
@@ -168,6 +153,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
           <PlayerBanner
             isMe={false}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={(meIndex + 1) % 4}
             stack={1000}
@@ -175,6 +161,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           />
           <PlayerBanner
             isMe={false}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={(meIndex + 2) % 4}
             stack={1000}
@@ -184,6 +171,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
           <PlayerBanner
             isMe={true}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={meIndex % 4}
             stack={1000}
@@ -192,6 +180,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           />
           <PlayerBanner
             isMe={false}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={(meIndex + 3) % 4}
             stack={1000}
@@ -284,9 +273,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
           +
         </Button>
       </div>
-      <Button
-        onClick={() => performAction(ACTIONS.RAISE, raiseValue)}
-      >
+      <Button onClick={() => performAction(ACTIONS.RAISE, raiseValue)}>
         Raise
       </Button>
       <div className="flex gap-x-4 w-full">
@@ -329,6 +316,7 @@ interface PlayerBannerProps {
   isMe: boolean;
   currentIndex: number;
   playerIndex: number;
+  gameState: GameState;
   stack: number;
   cards?: PlayerCards[];
   position: number;
@@ -337,17 +325,34 @@ function PlayerBanner({
   isMe,
   currentIndex,
   playerIndex: index,
-  stack,
+  gameState,
   cards,
   position,
 }: PlayerBannerProps) {
   const width = isMe ? "w-[230px]" : "w-[174px]";
-  const playerIndex = index % 4;
+  const playerIndex = index;
+  if (typeof gameState?.players[playerIndex] === "undefined") {
+    return (
+      <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
+        {playerIndex == currentIndex && <TurnToken position={position} />}
+        <div
+          className={classnames(
+            "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
+            width
+          )}
+        ></div>
+      </div>
+    );
+  }
+  const playerBet = Number(gameState.players[playerIndex].current_bet);
+  const playerStack = gameState.players[playerIndex];
+  const playerCards = gameState.players[playerIndex].hand;
 
   return (
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
       {playerIndex == currentIndex && <TurnToken position={position} />}
-      <Cards cards={cards} />
+      <Stack stack={playerBet} />
+      {playerCards.length == 2 && <Cards cards={cards} />}
       <div
         className={classnames(
           "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
@@ -366,7 +371,7 @@ function PlayerBanner({
           <div>
             <div className="flex gap-x-1 text-xs">
               <Image src="/stack-icon.svg" height="13" width="13" alt="icon" />
-              <span>{stack}</span>
+              <span>{1000}</span>
             </div>
 
             <div className="flex gap-x-1 text-xs">
@@ -376,6 +381,24 @@ function PlayerBanner({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+interface StackProps {
+  stack: number;
+}
+
+function Stack({ stack }: StackProps) {
+  if (stack == 0) {
+    return;
+  }
+  return (
+    <div
+      className={classnames(
+        "absolute -bottom-20 rounded-full text-white font-bold border-cyan-400 border bg-slate-700 w-10 h-10 flex items-center justify-center"
+      )}
+    >
+      {stack} APT
     </div>
   );
 }
