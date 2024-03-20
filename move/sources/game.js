@@ -154,7 +154,7 @@ function evaluateHandDetails(cardsArr) {
     let suits = {}, values = {};
     let straight = false, flush = false, highestValue = 0;
     let pairs = 0, threeOfAKind = 0, fourOfAKind = 0
-    let bestCombinationHighestValue = {};
+    let bestCombinationHighestValue = Array(9).fill(0).reduce((acc, _, i) => ({ ...acc, [i + 1]: [] }), {});
     cardsArr.forEach(card => {
         if (!suits[card.suit]) suits[card.suit] = 1;
         else suits[card.suit]++;
@@ -175,26 +175,33 @@ function evaluateHandDetails(cardsArr) {
     for (let i = 0; i < 13; i++) {
         consecutive = values[i] && values[12] || values[i] ? consecutive + 1 : 0;
         if (consecutive >= 5) {
-            bestCombinationHighestValue[5] = [cardHeirarchy.indexOf(values[i])]
+            bestCombinationHighestValue[5] = [i]
             straight = true
         };
     }
 
     Object.entries(values).forEach(([value, count]) => {
         if (count === 2) {
-            const handRank = 2;
-            bestCombinationHighestValue[handRank].push(cardHeirarchy.indexOf(value));
-            pairs++;
+            if (pairs === 1) {
+                const handRank = 3;
+                bestCombinationHighestValue[handRank].push(bestCombinationHighestValue[2].pop());
+                bestCombinationHighestValue[handRank].push(value);
+                pairs++
+            } else {
+                const handRank = 2;
+                bestCombinationHighestValue[handRank].push(value);
+                pairs++
+            }
 
         };
         if (count === 3) {
             const handRank = 4;
-            bestCombinationHighestValue[handRank].push(cardHeirarchy.indexOf(value));
+            bestCombinationHighestValue[handRank].push(value);
             threeOfAKind++
         };
         if (count === 4) {
             const handRank = 8;
-            bestCombinationHighestValue[handRank].push(cardHeirarchy.indexOf(value));
+            bestCombinationHighestValue[handRank].push(value);
             fourOfAKind++
         };
     });
@@ -209,15 +216,15 @@ function evaluateHandDetails(cardsArr) {
     else if (pairs === 2) { handType = "Two Pair"; handRank = 3; }
     else if (pairs === 1) { handType = "One Pair"; handRank = 2; }
 
-    return { handType, handRank, comparisonValue: highestValue };
+    return { handType, handRank, comparisonValue: highestValue, bestCombinationHighestValue };
 }
 const cardHeirarchy = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'jack', 'queen', 'king', 'ace'];
 
-function evaluateHand(playerId) {
+function evaluateHand(cardsArr) {
     // Find the player and their current hand
     //const player = gameState.players.find(p => p.id === playerId);
-    const playerCards = [{ value: "7", suit: "hearts" }, { value: "queen", suit: "diamonds" }]
-    const cardsArr = [{ value: "6", suit: "spades" }, { value: "2", suit: "diamonds" }, { value: "7", suit: "diamonds" }, { value: "8", suit: "diamonds" }, { value: "10", suit: "spades" }, ...playerCards] // Combine player's hand with community cards
+    // const playerCards = [{ value: "3", suit: "diamonds" }, { value: "4", suit: "diamonds" }]
+    // const cardsArr = [{ value: "6", suit: "spades" }, { value: "2", suit: "diamonds" }, { value: "7", suit: "diamonds" }, { value: "8", suit: "diamonds" }, { value: "10", suit: "spades" }, ...playerCards] // Combine player's hand with community cards
 
     // Pass the combined array of cards to evaluateHandDetails for evaluation
     let handEvaluation = evaluateHandDetails(cardsArr);
@@ -227,25 +234,92 @@ function evaluateHand(playerId) {
 }
 
 
+const evaluateWinnerWithSameHandRank = (player1, player2, handRank) => {
+    const { bestCombinationHighestValue: bestCombinationHighestValue1, handRank: handRank1, comparisonValue: comparisonValue1 } = player1.evaluation;
+    const { bestCombinationHighestValue: bestCombinationHighestValue2, handRank: handRank2, comparisonValue: comparisonValue2 } = player2.evaluation;
+    console.log(bestCombinationHighestValue1[handRank].length)
+    if (handRank === "7") {
+        bestCombinationHighestValue1[handRank] = [bestCombinationHighestValue1["2"].pop(), bestCombinationHighestValue1["4"].pop()]
+        bestCombinationHighestValue2[handRank] = [bestCombinationHighestValue2["2"].pop(), bestCombinationHighestValue2["4"].pop()]
+    }
+    else if (handRank === "9") {
+        bestCombinationHighestValue1[handRank] = [bestCombinationHighestValue1["5"].pop(), bestCombinationHighestValue1["6"].pop()]
+        bestCombinationHighestValue2[handRank] = [bestCombinationHighestValue2["5"].pop(), bestCombinationHighestValue2["6"].pop()]
+    }
+    if (bestCombinationHighestValue1[handRank].slice(-1) > bestCombinationHighestValue2[handRank].slice(-1)) {
+        return player1
+    }
+    else if (bestCombinationHighestValue1[handRank].slice(-1) < bestCombinationHighestValue2[handRank].slice(-1)) {
+        return player2
+    }
+    else if (bestCombinationHighestValue1[handRank].length > 1 && bestCombinationHighestValue2[handRank].length > 1) {
+        if (bestCombinationHighestValue1[handRank].slice(-2) > bestCombinationHighestValue2[handRank].slice(-2)) {
+            return player1
+        }
+        else if (bestCombinationHighestValue1[handRank].slice(-2) < bestCombinationHighestValue2[handRank].slice(-2)) {
+            return player2
+        }
+    }
+    if (comparisonValue1 > comparisonValue2) {
+        return player1
+    }
+    else if (comparisonValue1 < comparisonValue2) {
+        return player2
+    }
+    else {
+        return "Draw"
+    }
+}
+
 
 function finalEvaluationAndWinnerDetermination() {
-    let evaluations = gameState.players
-        .filter(player => player.status === "active")
-        .map(player => ({
-            playerId: player.id,
-            evaluation: evaluateHand(player.id),
-        }));
+    // const playerCards = [{ value: "3", suit: "diamonds" }, { value: "4", suit: "diamonds" }]
+    // const cardsArr = [{ value: "6", suit: "spades" }, { value: "2", suit: "diamonds" }, { value: "7", suit: "diamonds" }, { value: "8", suit: "diamonds" }, { value: "10", suit: "spades" }, ...playerCards] // Combine player's hand with community cards
+    const community = [{ value: "6", suit: "spades" },
+    { value: "6", suit: "diamonds" },
+    { value: "7", suit: "diamonds" },
+    { value: "8", suit: "diamonds" },
+    { value: "9", suit: "diamonds" }]
+    const players = [{ status: "active", id: 0, hand: [...community, { value: "6", suit: "diamonds" }, { value: "6", suit: "clubs" }] },
+    { status: "active", id: 1, hand: [...community, { value: "10", suit: "diamonds" }, { value: "7", suit: "clubs" }] },
+    { status: "activ", id: 2 },
+    { status: "activ", id: 3 }];
+    let evaluations =
+        players.filter(player => player.status === "active")
+            .map(player => ({
+                playerId: player.id,
+                evaluation: evaluateHand(player.hand),
+            }));
 
-    const winner = evaluations.reduce((prev, current) => {
-        if (prev.evaluation.handRank === current.evaluation.handRank) {
-            return prev.evaluation.comparisonValue > current.evaluation.comparisonValue ? prev : current;
+    let winners = [];
+    for (const evaluation of evaluations.slice(1)) {
+        if (!winners.length) {
+            winners.push(evaluations[0])
         }
-        return prev.evaluation.handRank > current.evaluation.handRank ? prev : current;
-    });
+        console.log(evaluation.playerId)
+        for (const prevWinner of winners) {
+            if (prevWinner.evaluation.handRank === evaluation.evaluation.handRank) {
+                if (prevWinner.playerId === evaluation.playerId) {
+                    break
+                }
 
-    distributePot(winner.playerId);
+                const winner = evaluateWinnerWithSameHandRank(prevWinner, evaluation, `${evaluation.evaluation.handRank}`)
+                if (winner === "Draw") {
+                    winners.push(evaluation)
+                }
+                else {
+                    winners = [winner]
+                }
+            } else if (prevWinner.evaluation.handRank < evaluation.evaluation.handRank) {
+                winners = [evaluation]
+            }
+        }
+        // 1 --> 2 --> Draw --> 3 ---> 3 -> 1 = 3
+        //distributePot(winner.playerId);
+
+    }
     gameState.gameEnded = true;
-    console.log(`Player ${winner.playerId} wins with a ${winner.evaluation.handType}`);
+    console.log(JSON.stringify(winners));
 }
 
 function nextRound() {
@@ -367,4 +441,4 @@ function startBettingRound() {
 
 // startGame();
 
-console.log(evaluateHand(1))
+finalEvaluationAndWinnerDetermination()

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import {
   CONTRACT_ADDRESS,
   GameState,
-  GameStatus,
+  GameStage,
   getGameByRoomId,
 } from "../../../../controller/contract";
 import { Maybe } from "aptos";
@@ -87,7 +87,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   useEffect(() => {
     if (
       gameState &&
-      gameState?.state === GameStatus.INPROGRESS &&
+      gameState?.state === GameStage.INPROGRESS &&
       !handRevealed
     ) {
       revealCurrentUserCard();
