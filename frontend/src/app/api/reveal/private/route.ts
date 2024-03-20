@@ -1,4 +1,4 @@
-import { revealPlayerCard } from "../../../../../controller/index";
+import { revealPlayerCard, createCardMapping } from "../../../../../controller/index";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -10,6 +10,12 @@ export async function POST(request: Request) {
           "Attributes missing on the payload. Please send gameId, userPubKey and userSignedMessage",
         userCards: [],
       });
+    }
+    try {
+
+      await createCardMapping(gameId);
+    } catch (err) {
+      console.log(err);
     }
     const userCards = await revealPlayerCard(
       gameId,
