@@ -8,12 +8,20 @@ import {
   Aptos,
 } from "@aptos-labs/ts-sdk";
 import { getGameMapping } from "./index";
+import { getGameById, GameStage } from "./contract";
 type Hand = { suit: string; value: string };
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
 const CONTRACT_PRIVATE_KEY = process.env.CONTRACT_PRIVATE_KEY;
 
 export const revealGameCards = async (gameId: number | string) => {
+  const game = await getGameById(+gameId);
+  if (!game) {
+    throw new Error("No game found!");
+  }
+  if (game.stage == GameStage.CLOSE) {
+    throw new Error("Game is already closed!");
+  }
   const config = new AptosConfig({ network: Network.RANDOMNET }); // default network is devnet
   const aptos = new Aptos(config);
   // Create a private key instance for Ed25519 scheme
