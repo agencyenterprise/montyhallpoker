@@ -4,7 +4,7 @@ version = "1.0.0"
 upgrade_policy = "compatible"
 
 [addresses]
-poker = "0x9f535b0ec315f49bc4e3aea04e79b28fb5077726aeb9eb09276d3ef0ad1e0953"
+poker = "0x8f7f993b8e2946e61dbe55c194fb740afe0b5a2088779c12bca8149a3a6c769e"
 
 [dependencies]
 AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", rev = "randomnet", subdir = "aptos-move/framework/aptos-framework" }

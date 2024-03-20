@@ -93,7 +93,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
   }, [gameState]);
 
-  const previousGameState = usePrevious(gameState);
+  const previousGameState = usePrevious<Maybe<GameState> | undefined>(gameState);
 
   useEffect(() => {
     retrieveGameState();
@@ -108,6 +108,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   useEffect(() => {
     if (gameState?.state == GameStatus.INPROGRESS) {
+      console.log("turn ", gameState?.turn, " me", me, " previous turn", previousGameState?.turn);
       if (gameState?.turn == me && previousGameState?.turn != me) {
         if (document.hidden) {
           playSound("your-turn-blurred");
@@ -118,11 +119,20 @@ export default function PokerGameTable({ params }: { params: any }) {
         // determine last action made
         if (+gameState?.current_bet > +previousGameState?.current_bet) {
           playSound("more-chips");
+          console.log("raise");
         } else if (+gameState?.current_bet == +previousGameState?.current_bet && +gameState?.current_bet > 0) {
           playSound("chips");
-        } else if (+gameState?.current_bet == 0) {
+          console.log("call");
+          // if last player is folded do not play check sound:
+        } else if (
+          +gameState?.current_bet == 0 &&
+          gameState?.players?.[previousGameState?.currentPlayerIndex]?.status != 1
+        ) {
           playSound("wood-knock");
-          alert("action from game");
+          console.log("check");
+        } else if (gameState?.players?.[previousGameState.currentPlayerIndex]?.status == 1) {
+          playSound("fold", 0.7);
+          console.log("fold");
         }
       }
     }
@@ -133,7 +143,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     } else if (gameState?.stage == GameStage.River && previousGameState?.stage != GameStage.River) {
       revealComunityCards(gameState.id);
     }
-  }, [gameState, me, previousGameState]);
+  }, [gameState, me]);
 
   const revealComunityCards = async (gameId: string, retry = 0) => {
     if (!gameId) {
@@ -497,9 +507,6 @@ interface StackProps {
 }
 
 function Stack({ stack }: StackProps) {
-  if (stack == 0) {
-    return;
-  }
   return (
     <div className="flex gap-x-2">
       <PokerStackIcon />{" "}

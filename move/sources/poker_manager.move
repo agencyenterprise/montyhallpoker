@@ -476,9 +476,10 @@ module poker::poker_manager {
 
         let gamestate = borrow_global_mut<GameState>(@poker);
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
-        assert!(gamestate.stage == STAGE_SHOWDOWN, EINVALID_STAGE);
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+
+        assert!(game_metadata.stage == STAGE_SHOWDOWN, EINVALID_STAGE);
 
         let allCards = vector::empty<Card>();
         vector::append<Card>(&mut allCards, game_metadata.deck);
