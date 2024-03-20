@@ -130,7 +130,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         ) {
           playSound("wood-knock");
           console.log("check");
-        } else if (gameState?.players?.[previousGameState.currentPlayerIndex]?.status == 1) {
+        } else if (gameState?.players?.[previousGameState?.currentPlayerIndex]?.status == 1) {
           playSound("fold", 0.7);
           console.log("fold");
         }
@@ -181,7 +181,8 @@ export default function PokerGameTable({ params }: { params: any }) {
         setMe(account.address);
 
         setGameStarted(true);
-        setCurrentPot(toAptos(gameState?.pot!));
+        console.log("Set pot ", gameState?.pot, " to ", toAptos(gameState?.pot!));
+        setCurrentPot(+(gameState?.pot || 0));
       }
     } catch (error) {
       // { code: 4001, message: "User rejected the request."}
