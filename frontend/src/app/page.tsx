@@ -97,7 +97,7 @@ function GameRoomLobby() {
       return {
         ...room,
         disabled:
-          !room.hasMe || (room.players.length <= MAX_PLAYER_COUNT && !room.hasMe),
+          (room.players.length >= MAX_PLAYER_COUNT && !room.hasMe),
       };
     });
     setAllRoomsData(processedLobbyData);
