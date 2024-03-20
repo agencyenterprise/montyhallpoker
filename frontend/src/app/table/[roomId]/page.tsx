@@ -344,7 +344,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
           <Button
             className="w-full"
             onClick={() =>
-              performAction(ACTIONS.CALL, Number(gameState?.current_bet))
+              performAction(ACTIONS.CALL, Number(+gameState?.current_bet - +gameState!.players[meIndex].current_bet))
             }
           >
             Call
