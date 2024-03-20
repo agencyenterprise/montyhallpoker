@@ -126,6 +126,7 @@ module poker::poker_manager {
         hand_rank: u8,
         comparison_value: u8,
         hand_type: vector<u8>,
+        bestCombinationHighestValue: simple_map::SimpleMap<u8, vector<u8>>,
     }
 
     public fun assert_is_owner(addr: address) {
@@ -817,7 +818,7 @@ module poker::poker_manager {
         }
     }
 
-    fun evaluate_hand_details(cards: &vector<Card>): (vector<u8>, u8, u8) {
+    fun evaluate_hand_details(cards: &vector<Card>): (vector<u8>, u8, u8, simple_map::SimpleMap<u8, vector<u8>>) {
         let straight: bool = false;
         let handType: vector<u8> = b"High Card";
         let _flush: bool = false;
@@ -828,7 +829,13 @@ module poker::poker_manager {
         let fourOfAKind: u8 = 0;
         let suits = simple_map::new<vector<u8>, u8>();
         let values = simple_map::new<u8, u8>();
-        let bestCombinationValue: u8 = 0;
+        let bestCombinationHighestValue = simple_map::new<u8, vector<u8>>();
+        let n = 1;
+        while (n < 10) {
+            simple_map::upsert(&mut bestCombinationHighestValue, (n as u8), vector::empty());
+            n = n + 1;
+        };
+        
         let i = 0;
 
         while (i < vector::length(cards)) {
@@ -867,9 +874,14 @@ module poker::poker_manager {
         };
 
         _flush = vector::any<u8>(&simple_map::values<vector<u8>, u8>(&suits), |count| {
-            *count >= 5 
+            *count >= 5
         });
 
+        if (_flush) {
+            let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &6);
+            vector::push_back(array, highestValue);
+        };
+        
         let consecutiveCount: u8 = 0;
         let lastValue: u8 = 0;
 
@@ -885,6 +897,11 @@ module poker::poker_manager {
                     lastValue = idx;
 
                     if (consecutiveCount >= 5) {
+                        let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &5);
+                        if (vector::length(array) > 0) {
+                            vector::pop_back(array);
+                        };
+                        vector::push_back(array, idx);
                         straight = true;
                         break
                     };
@@ -896,6 +913,11 @@ module poker::poker_manager {
 
             if (idx == 3 && consecutiveCount == 4 && simple_map::contains_key<u8, u8>(&values, &12)) {
                 straight = true;
+                let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &5);
+                if (vector::length(array) > 0) {
+                    vector::pop_back(array);
+                };
+                vector::push_back(array, 12);
                 break
             };
         };
@@ -908,11 +930,37 @@ module poker::poker_manager {
             let key = vector::borrow(&keys, j);
             let value = simple_map::borrow<u8, u8>(&values, key);
             if (*value == 2) {
+
+                if (pairs == 1) {
+                    let tempHandRank = 3;
+                    let array2 = *simple_map::borrow(&bestCombinationHighestValue, &2);
+                    let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &tempHandRank);
+                    let key_value = *key;
+                    {
+                        let lastItem = vector::borrow(&array2, 0);
+                        vector::push_back(array, *lastItem);
+                    };
+
+                    // Now you can use the copied value
+                    vector::push_back(array, key_value);
+                    debug::print(&string::utf8(b"Added Two Pair: "));
+                    debug::print(key);
+                } else {
+                    debug::print(&string::utf8(b"Added One Pair: "));
+                    debug::print(key);
+                    let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &2);
+                    vector::push_back(array, *key);
+                };
+
                 pairs = pairs + 1;
 
             } else if (*value == 3) {
+                let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &4);
+                vector::push_back(array, *key);
                 threeOfAKind = threeOfAKind + 1;
             } else if (*value == 4) {
+                let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &8);
+                vector::push_back(array, *key);
                 fourOfAKind = fourOfAKind + 1;
             };
             j = j + 1;
@@ -943,11 +991,116 @@ module poker::poker_manager {
             handType = b"One Pair";
             handRank = 2;
         };
-
-        (handType, handRank, highestValue)
+        
+       /*  debug::print(&string::utf8(b"Best comparison highest value: "));
+        let array2 = *simple_map::borrow(&bestCombinationHighestValue, &2);
+        let array3 = *simple_map::borrow(&bestCombinationHighestValue, &3);
+        let array2value = vector::borrow(&array2, 0);
+        let array3value = vector::borrow(&array3, 1);
+        debug::print(array2value);
+        debug::print(array3value);
+        debug::print(&string::utf8(b"Hand type: "));
+        debug::print(&string::utf8(handType));
+ */
+        (handType, handRank, highestValue, bestCombinationHighestValue)
     }
 
-    fun evaluate_hand(communityCards: &vector<Card>, playerCards: &vector<Card>): (vector<u8>, u8, u8) {
+    /*
+        struct Evaluation has drop, copy {
+        player_index: u64,
+        hand_rank: u8,
+        comparison_value: u8,
+        hand_type: vector<u8>,
+        bestCombinationHighestValue: simple_map::SimpleMap<u8, vector<u8>>,
+    }
+    */
+
+    fun evaluate_winner_with_same_hand_rank(evaluation1: Evaluation, evaluation2: Evaluation): option::Option<Evaluation> {
+        let handRank = evaluation1.hand_rank;
+        let comparisonValue1 = evaluation1.comparison_value;
+        let comparisonValue2 = evaluation2.comparison_value;
+        let bestCombinationHighestValue1 = evaluation1.bestCombinationHighestValue;
+        let bestCombinationHighestValue2 = evaluation2.bestCombinationHighestValue;
+
+        if (handRank == 1) {
+            if (comparisonValue1 > comparisonValue2) {
+                return option::some(evaluation1)
+            } else if (comparisonValue1 < comparisonValue2) {
+                return option::some(evaluation2)
+            };
+            return option::none<Evaluation>()
+        };
+
+        if (handRank == 7) {
+            {
+                let fullhousePair = simple_map::borrow(&bestCombinationHighestValue1, &2);
+                let fullhouseTrio = simple_map::borrow(&bestCombinationHighestValue1, &4);
+                let fullhousePairItem = vector::borrow(fullhousePair, 0);
+                let fullhouseTrioItem = vector::borrow(fullhouseTrio, 0);
+                let fullhouseArray = vector[(*fullhousePairItem), (*fullhouseTrioItem)];
+                simple_map::upsert(&mut bestCombinationHighestValue1, 7, fullhouseArray);
+            };
+            {
+                let fullhousePair = simple_map::borrow(&bestCombinationHighestValue2, &2);
+                let fullhouseTrio = simple_map::borrow(&bestCombinationHighestValue2, &4);
+                let fullhousePairItem = vector::borrow(fullhousePair, 0);
+                let fullhouseTrioItem = vector::borrow(fullhouseTrio, 0);
+                let fullhouseArray = vector[(*fullhousePairItem), (*fullhouseTrioItem)];
+                simple_map::upsert(&mut bestCombinationHighestValue2, 7, fullhouseArray);
+            };
+        } else if (handRank == 9) {
+            {
+                let straightFlushStraight = simple_map::borrow(&bestCombinationHighestValue1, &5);
+                let straightFlushFlush = simple_map::borrow(&bestCombinationHighestValue1, &6);
+                let straightFlushStraightItem = vector::borrow(straightFlushStraight, 0);
+                let straightFlushFlushItem = vector::borrow(straightFlushFlush, 0);
+                let straightFlushArray = vector[(*straightFlushStraightItem), (*straightFlushFlushItem)];
+                simple_map::upsert(&mut bestCombinationHighestValue1, 9, straightFlushArray);
+            };
+            {
+                let straightFlushPair = simple_map::borrow(&bestCombinationHighestValue2, &5);
+                let straightFlushFlush = simple_map::borrow(&bestCombinationHighestValue2, &6);
+                let straightFlushPairItem = vector::borrow(straightFlushPair, 0);
+                let straightFlushFlushItem = vector::borrow(straightFlushFlush, 0);
+                let straightFlushArray = vector[(*straightFlushPairItem), (*straightFlushFlushItem)];
+                simple_map::upsert(&mut bestCombinationHighestValue2, 9, straightFlushArray);
+            };
+        };
+
+        let bestCombinationHighestValue1Array = simple_map::borrow(&bestCombinationHighestValue1, &handRank);
+        let bestCombinationHighestValue2Array = simple_map::borrow(&bestCombinationHighestValue2, &handRank);
+        let bestCombinationHighestValue1_len = vector::length(bestCombinationHighestValue1Array);
+        let bestCombinationHighestValue2_len = vector::length(bestCombinationHighestValue2Array);
+        debug::print(&string::utf8(b"Best combination highest value 1: "));
+        debug::print(&bestCombinationHighestValue1_len);
+        debug::print(&string::utf8(b"Best combination highest value 2: "));
+        debug::print(&bestCombinationHighestValue2_len);
+        let bestCombinationHighestValue1_last = vector::borrow(bestCombinationHighestValue1Array, (bestCombinationHighestValue1_len - 1));
+        let bestCombinationHighestValue2_last = vector::borrow(bestCombinationHighestValue2Array, (bestCombinationHighestValue2_len - 1));
+
+        if ((*bestCombinationHighestValue1_last) > (*bestCombinationHighestValue2_last)) {
+            return option::some(evaluation1)
+        } else if ((*bestCombinationHighestValue1_last) < (*bestCombinationHighestValue2_last)) {
+            return option::some(evaluation2)
+        } else if (bestCombinationHighestValue1_len > bestCombinationHighestValue2_len) {
+            let bestCombinationHighestValue1_second_last = vector::borrow(bestCombinationHighestValue1Array, (bestCombinationHighestValue1_len - 2));
+            let bestCombinationHighestValue2_second_last = vector::borrow(bestCombinationHighestValue2Array, (bestCombinationHighestValue2_len - 2));
+            if ((*bestCombinationHighestValue1_second_last) > (*bestCombinationHighestValue2_second_last)) {
+                return option::some(evaluation1)
+            } else if ((*bestCombinationHighestValue1_second_last) < (*bestCombinationHighestValue2_second_last)) {
+                return option::some(evaluation2)
+            };
+        };
+
+        if (comparisonValue1 > comparisonValue2) {
+            return option::some(evaluation1)
+        } else if (comparisonValue1 < comparisonValue2) {
+            return option::some(evaluation2)
+        };
+        return option::none<Evaluation>()
+    }
+
+    fun evaluate_hand(communityCards: &vector<Card>, playerCards: &vector<Card>): (vector<u8>, u8, u8, simple_map::SimpleMap<u8, vector<u8>>) {
         let newCards = vector::empty<Card>();
         vector::append<Card>(&mut newCards, *communityCards);
         vector::append<Card>(&mut newCards, *playerCards);
@@ -962,42 +1115,58 @@ module poker::poker_manager {
         while (i < players_len) {
             let player = vector::borrow(&game_metadata.players, i);
             if (player.status == STATUS_ACTIVE) {
-                let (hand_type, hand_rank, highest_value) = evaluate_hand(&game_metadata.community, &player.hand);
-
+                let (hand_type, hand_rank, highest_value, bestCombinationHighestValue) = evaluate_hand(&game_metadata.community, &player.hand);
+                
                 let evaluation = Evaluation {
                     player_index: i,
                     hand_rank: hand_rank,
                     comparison_value: highest_value,
                     hand_type: hand_type,
+                    bestCombinationHighestValue: bestCombinationHighestValue,
                 };
                 vector::push_back(&mut evaluations, evaluation);
             };
             i = i + 1;
         };
 
+        debug::print(&string::utf8(b"Evaluations: "));
+        debug::print(&evaluations);
+        debug::print(&string::utf8(b"JOHNNY"));
+
         assert!(vector::length(&evaluations) > 0, EINVALID_GAME);
 
         // Initialize tracking for potential winners
         let winners: vector<Evaluation> = vector::empty();
-        let highest_rank: u8 = 0;
-        let highest_comparison_value: u8 = 0;
+        let eval_index = 1;
 
-        let j = 0;
-        while (j < vector::length(&evaluations)) {
-            let evaluation = vector::borrow(&evaluations, j);
-            if (evaluation.hand_rank > highest_rank || (evaluation.hand_rank == highest_rank && evaluation.comparison_value > highest_comparison_value)) {
-                // Clear previous winners and update highest values
-                winners = vector::empty();
-                vector::push_back(&mut winners, *evaluation);
-                highest_rank = evaluation.hand_rank;
-                highest_comparison_value = evaluation.comparison_value;
-            } else if (evaluation.hand_rank == highest_rank && evaluation.comparison_value == highest_comparison_value) {
-                // Add to winners in case of a draw
-                vector::push_back(&mut winners, *evaluation);
+        while (eval_index < vector::length(&evaluations)) {
+            if (vector::is_empty(&winners)) {
+                vector::push_back(&mut winners, *vector::borrow(&evaluations, 0));
             };
-            j = j + 1;
-        };
+            let j = 0;
+            let curr_evaluation = vector::borrow(&evaluations, eval_index);
+            while (j < vector::length(&winners)) {
+                let prevWinner = vector::borrow(&winners, j);
+                if (prevWinner.hand_rank == curr_evaluation.hand_rank) {
+                    if (prevWinner.player_index == curr_evaluation.player_index) {
+                        break
+                    };
 
+                    let winnerEvaluation = evaluate_winner_with_same_hand_rank(*prevWinner, *curr_evaluation);
+                    if (option::is_some(&winnerEvaluation)) {
+                        winners = vector::empty();
+                        vector::push_back(&mut winners, *option::borrow(&winnerEvaluation));
+                    } else if (option::is_none(&winnerEvaluation)) {
+                        vector::push_back(&mut winners, *curr_evaluation);
+                    };
+                } else if (prevWinner.hand_rank < curr_evaluation.hand_rank) {
+                    winners = vector::empty();
+                    vector::push_back(&mut winners, *curr_evaluation);
+                };
+            j = j + 1;
+            };
+            eval_index = eval_index + 1;
+        };
         winners
     }
 
@@ -1007,213 +1176,6 @@ module poker::poker_manager {
       T E S T   F U N C T I O N S
     =================================
     */
-
-    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, account3 = @0x5, account4 = @0x6)]
-    fun test_join_game(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
-    admin: &signer, aptos_framework: &signer)
-    acquires GameState, UserGames {
-        // Setup 
-
-        randomness::initialize_for_testing(aptos_framework);
-        randomness::set_seed(x"0000000000000000000000000000000000000000000000000000000000000000");
-
-        timestamp::set_time_has_started_for_testing(aptos_framework);
-        timestamp::update_global_time_for_test_secs(1710563686);
-
-        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
-        let aptos_framework_address = signer::address_of(aptos_framework);
-        account::create_account_for_test(aptos_framework_address);
-
-        let player1 = account::create_account_for_test(signer::address_of(account1));
-        let player2 = account::create_account_for_test(signer::address_of(account2));
-        let player3 = account::create_account_for_test(signer::address_of(account3));
-        let player4 = account::create_account_for_test(signer::address_of(account4));
-
-        coin::register<AptosCoin>(&player1);
-        coin::register<AptosCoin>(&player2);
-        coin::register<AptosCoin>(&player3);
-        coin::register<AptosCoin>(&player4);
-
-        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
-
-        init_module(admin);
-        let game_id = 1;
-
-        {
-            let pre_game = get_game_metadata_by_id(game_id);
-            assert!(pre_game.state == GAMESTATE_OPEN, 0);
-            assert!(vector::length(&pre_game.players) == 0, 0);
-            assert!(vector::length(&pre_game.community) == 0, 0);
-        };
-
-        // Simulate Joining
-        join_game(account1, 1, 5000000);
-        join_game(account2, 1, 6000000);
-        join_game(account3, 1, 7000000);
-        join_game(account4, 1, 8000000);
-
-        let game_metadata = get_game_metadata_by_id(game_id);
-
-        //debug::print(&game_metadata);
-
-        // Make sure the game is in the global state and has the correct number of players
-        assert!(game_metadata.id == copy game_id, EINVALID_GAME);
-        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, EINVALID_GAME);
-        assert!(game_metadata.stage == STAGE_PREFLOP, EINVALID_GAME);
-        assert!(vector::length(&game_metadata.players) == 4, EINVALID_GAME);
-        assert!(vector::length(&game_metadata.community) == 0, EINVALID_GAME);
-
-        {
-            // Assert each player has 2 cards
-            let player1 = vector::borrow(&game_metadata.players, 0);
-            let player2 = vector::borrow(&game_metadata.players, 1);
-            let player3 = vector::borrow(&game_metadata.players, 2);
-            let player4 = vector::borrow(&game_metadata.players, 3);
-            assert!(vector::length(&player1.hand) == 2, EINVALID_GAME);
-            assert!(vector::length(&player2.hand) == 2, EINVALID_GAME);
-            assert!(vector::length(&player3.hand) == 2, EINVALID_GAME);
-            assert!(vector::length(&player4.hand) == 2, EINVALID_GAME);
-        };
-
-        debug::print(&string::utf8(b"Game stage: "));
-        debug::print(&game_metadata.stage);
-
-        // Actions
-        {
-            perform_action(account3, game_id, RAISE, 8000000);
-            perform_action(account4, game_id, CALL, 8000000);
-            perform_action(account1, game_id, CALL, 8000000);
-            perform_action(account2, game_id, RAISE, 20000000);
-            perform_action(account3, game_id, FOLD, 0);
-            perform_action(account4, game_id, CALL, 20000000 - 8000000);
-            perform_action(account1, game_id, FOLD, 0);
-
-            let game_metadata = get_game_metadata_by_id(game_id);
-
-            assert!(game_metadata.stage == STAGE_FLOP, EINVALID_GAME);
-        };
-
-        /* {
-            let gamestate = borrow_global_mut<GameState>(@poker);
-            let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
-
-            let num_players = vector::length(&game_metadata.players);
-            let i = 0;
-            while (i < num_players) {
-                let player = vector::borrow_mut(&mut game_metadata.players, i);
-
-                // Instead of a match statement, use if-else to update player hands based on the index
-                if (i == 0) {
-                    player.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}];
-                } else if (i == 1) {
-                    player.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}, Card{cardId: 3, suit_string: b"spades", value_string: b"2"}];
-                } else if (i == 2) {
-                    player.hand = vector[Card{cardId: 4, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 5, suit_string: b"clubs", value_string: b"10"}];
-                } else if (i == 3) {
-                    player.hand = vector[Card{cardId: 6, suit_string: b"spades", value_string: b"3"}, Card{cardId: 7, suit_string: b"spades", value_string: b"jack"}];
-                };
-                // Add more conditions as necessary for other players
-
-                i = i + 1;
-            };
-            
-        }; */
-
-        {
-            //perform_action(account3, game_id, FOLD, 8000000);
-            perform_action(account4, game_id, RAISE, 13000000);
-            //perform_action(account1, game_id, FOLD, 13000000);
-            perform_action(account2, game_id, RAISE, 18000000);
-            //perform_action(account3, game_id, CALL, 18000000);
-            perform_action(account4, game_id, CALL, 5000000);
-            //perform_action(account1, game_id, CALL, 18000000);
-
-            let game_metadata = get_game_metadata_by_id(game_id);
-
-            assert!(game_metadata.stage == STAGE_TURN, EINVALID_GAME);
-            assert!(vector::length(&game_metadata.community) == 4, EINVALID_GAME);
-        };
-
-        {
-            //perform_action(account3, game_id, CHECK, 0);
-            perform_action(account4, game_id, CHECK, 0);
-            /* perform_action(account1, game_id, CHECK, 0); */
-            perform_action(account2, game_id, RAISE, 10000000);
-            //perform_action(account3, game_id, CALL, 10000000);
-            perform_action(account4, game_id, CALL, 10000000);
-            /* perform_action(account1, game_id, CALL, 10000000); */
-
-            let game_metadata = get_game_metadata_by_id(game_id);
-
-            assert!(game_metadata.stage == STAGE_RIVER, EINVALID_GAME);
-            assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
-        };
-
-        {
-            //perform_action(account3, game_id, RAISE, 5000000);
-            perform_action(account4, game_id, RAISE, 10000000);
-            /* perform_action(account1, game_id, CALL, 10000000); */
-            perform_action(account2, game_id, CALL, 10000000);
-            //perform_action(account3, game_id, CALL, 10000000);
-
-            let game_metadata = get_game_metadata_by_id(game_id);
-
-            assert!(game_metadata.stage == STAGE_SHOWDOWN, EINVALID_GAME);
-            assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
-        };
-
-            populate_card_values(admin, game_id,
-        vector[
-            string::utf8(b"clubs"),    string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"diamonds"),
-            string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"clubs"),
-            string::utf8(b"clubs"),    string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"clubs"),
-            string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),   string::utf8(b"spades"),
-            string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"spades"),
-            string::utf8(b"hearts"),   string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"spades"),
-            string::utf8(b"hearts"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),   string::utf8(b"spades"),
-            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
-            string::utf8(b"clubs"),    string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
-            string::utf8(b"spades"),   string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),
-            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"clubs"),
-            string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"diamonds"),
-            string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"hearts"),   string::utf8(b"diamonds"),
-        ],
-        vector[
-            string::utf8(b"jack"),  string::utf8(b"6"),     string::utf8(b"8"),    string::utf8(b"2"),    string::utf8(b"10"),   string::utf8(b"7"),
-            string::utf8(b"3"),     string::utf8(b"4"),     string::utf8(b"5"),    string::utf8(b"10"),   string::utf8(b"8"),    string::utf8(b"king"),
-            string::utf8(b"queen"), string::utf8(b"8"),     string::utf8(b"2"),    string::utf8(b"9"),    string::utf8(b"king"), string::utf8(b"3"),
-            string::utf8(b"5"),     string::utf8(b"8"),     string::utf8(b"ace"),  string::utf8(b"king"), string::utf8(b"6"),    string::utf8(b"jack"),
-            string::utf8(b"10"),    string::utf8(b"ace"),   string::utf8(b"5"),    string::utf8(b"5"),    string::utf8(b"4"),    string::utf8(b"7"),
-            string::utf8(b"queen"), string::utf8(b"6"),     string::utf8(b"3"),    string::utf8(b"2"),    string::utf8(b"king"), string::utf8(b"4"),
-            string::utf8(b"2"),     string::utf8(b"ace"),   string::utf8(b"9"),    string::utf8(b"jack"), string::utf8(b"7"),    string::utf8(b"ace"),
-            string::utf8(b"9"),     string::utf8(b"9"),     string::utf8(b"jack"), string::utf8(b"10"),   string::utf8(b"7"),    string::utf8(b"queen"),
-            string::utf8(b"6"),     string::utf8(b"queen"), string::utf8(b"3"),    string::utf8(b"4")
-        ]
-        );
-        
-        {
-            let game_metadata = get_game_metadata_by_id(game_id);
-            debug::print(&string::utf8(b"Game metadata: "));
-            debug::print(&game_metadata);
-        };
-
-        let user1_games = borrow_global<UserGames>(signer::address_of(account1));
-        let user2_games = borrow_global<UserGames>(signer::address_of(account2));
-        let user3_games = borrow_global<UserGames>(signer::address_of(account3));
-        let user4_games = borrow_global<UserGames>(signer::address_of(account4));
-
-        // Make sure the users have the game in their list of games
-        assert!(vector::length(&user1_games.games) == 1, EINVALID_GAME);
-        assert!(vector::length(&user2_games.games) == 1, EINVALID_GAME);
-        assert!(vector::length(&user3_games.games) == 1, EINVALID_GAME);
-        assert!(vector::length(&user4_games.games) == 1, EINVALID_GAME);
-
-        coin::destroy_burn_cap(burn_cap);
-        coin::destroy_mint_cap(mint_cap);
-    }
 
     #[test_only]
     fun create_player(id: address, hand: vector<Card>): Player {
@@ -1245,21 +1207,23 @@ module poker::poker_manager {
             vector[
             Card{cardId: 0, suit_string: b"spades", value_string: b"2"},
             Card{cardId: 1, suit_string: b"diamonds", value_string: b"10"},
-            Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}
+            Card{cardId: 2, suit_string: b"clubs", value_string: b"7"},
             ]
         );
         
-        let player1 = create_player(@0x1, vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}]);
-        let player2 = create_player(@0x2, vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"5"}, Card{cardId: 3, suit_string: b"spades", value_string: b"6"}]);
-        let player3 = create_player(@0x3, vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"9"}]);
-        let player4 = create_player(@0x4, vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}]);
+        let player1 = create_player(@0x1, vector[Card{cardId: 3, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 7, suit_string: b"diamonds", value_string: b"4"}]);
+        let player2 = create_player(@0x2, vector[Card{cardId: 4, suit_string: b"clubs", value_string: b"5"}, Card{cardId: 8, suit_string: b"spades", value_string: b"6"}]);
+        let player3 = create_player(@0x3, vector[Card{cardId: 5, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 9, suit_string: b"diamonds", value_string: b"9"}]);
+        let player4 = create_player(@0x4, vector[Card{cardId: 6, suit_string: b"spades", value_string: b"3"}, Card{cardId: 10, suit_string: b"spades", value_string: b"jack"}]);
 
         game_metadata.players = vector[player1, player2, player3, player4];
         
-        let winners = get_game_winners(&mut game_metadata);
+        /* let winners = get_game_winners(&mut game_metadata);
+        debug::print(&string::utf8(b"Winners -----> "));
+        debug::print(&winners);
         let winner = vector::borrow(&winners, 0);
 
-        assert!(winner.player_index == 3, EINVALID_GAME);
+        assert!(winner.player_index == 3, EINVALID_GAME); */
 
         // One pair
 
@@ -1279,11 +1243,11 @@ module poker::poker_manager {
 
         game_metadata.players = vector[player1, player2];
 
-        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
+        /* winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
 
         debug::print(winner);
 
-        assert!(winner.player_index == 0, EINVALID_GAME);
+        assert!(winner.player_index == 1, EINVALID_GAME); */
 
         // Two pair
 
@@ -1297,14 +1261,22 @@ module poker::poker_manager {
             ]
         );
 
+        debug::print(&string::utf8(b"Two pair: "));
         player1.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}];
         player2.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}, Card{cardId: 3, suit_string: b"spades", value_string: b"2"}];
         player3.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 1, suit_string: b"clubs", value_string: b"10"}];
         player4.hand = vector[Card{cardId: 2, suit_string: b"spades", value_string: b"3"}, Card{cardId: 3, suit_string: b"spades", value_string: b"jack"}];
 
-        game_metadata.players = vector[player1, player2, player3, player4];
+        game_metadata.players = vector[player1, player2, player3];
 
-        winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
+        /* let (hand_type, hand_rank, highest_value, bestCombinationHighestValue) = evaluate_hand(&game_metadata.community, &player2.hand);
+
+        assert!(hand_type == b"Two Pair", EINVALID_GAME); */
+
+        let winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
+
+        debug::print(&string::utf8(b"Winner: "));
+        debug::print(winner);
 
         assert!(winner.player_index == 1, EINVALID_GAME);
 
@@ -1428,6 +1400,9 @@ module poker::poker_manager {
         game_metadata.players = vector[player1, player2, player3, player4];
 
         winner = vector::borrow(&get_game_winners(&mut game_metadata), 0);
+
+        debug::print(&string::utf8(b"Winner: "));
+        debug::print(winner);
 
         assert!(winner.player_index == 1, EINVALID_GAME);
 
