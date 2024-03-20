@@ -31,6 +31,7 @@ module poker::poker_manager {
     const ENOT_IN_GAME: u64 = 11;
     const EINVALID_CARD: u64 = 12;
     const ERAISE_TOO_LOW: u64 = 13;
+    const ERAISE_TOO_HIGH: u64 = 14;
 
     // Game states
     const GAMESTATE_OPEN: u64 = 0;
@@ -225,23 +226,22 @@ module poker::poker_manager {
         }
     }
 
-    fun get_max_raise_for(addr: address, game_metadata: &GameMetadata): u64 {
-        let min_balance_after_current_bet: u64 = U64_MAX;
+    fun get_max_raise_for(addr: address, players: &vector<Player>): u64 {
+        let min_balance: u64 = U64_MAX;
 
         let i = 0;
-        while (i < vector::length(&game_metadata.players)) {
-            let player = vector::borrow(&game_metadata.players, i);
+        while (i < vector::length(players)) {
+            let player = vector::borrow(players, i);
             // Skip folded players
             if (player.status == STATUS_ACTIVE && player.id != addr) {
                 let player_balance = coin::balance<AptosCoin>(player.id);
-                let balance_after_current_bet = player_balance - player.current_bet;
-                if (balance_after_current_bet < min_balance_after_current_bet) {
-                    min_balance_after_current_bet = balance_after_current_bet;
-                }
+                if (player_balance < min_balance) {
+                    min_balance = player_balance;
+                };
             };
             i = i + 1;
         };
-        min_balance_after_current_bet
+        min_balance
     }
     
     fun all_have_called_or_checked(players: &vector<Player>, current_bet: u64): bool {
@@ -364,6 +364,9 @@ module poker::poker_manager {
         let game_metadata = create_game_metadata(vector::length<u64>(&simple_map::keys(&gamestate.games)) + 1, room_id);
 
         simple_map::add(&mut gamestate.games, game_metadata.id, game_metadata);
+
+        debug::print(&string::utf8(b"Game created: "));
+        debug::print(&game_metadata);
     }
 
     public fun move_to_next_stage(game_id: u64) acquires GameState {
@@ -565,10 +568,6 @@ module poker::poker_manager {
             debug::print(&string::utf8(b"House Pot: "));
             debug::print(&housePot);
 
-            debug::print(&string::utf8(b"Reward: "));
-
-            debug::print(&housePot);
-
             debug::print(&string::utf8(b"Winner reward divided: "));
 
             debug::print(&winnerRewardDivided);
@@ -580,6 +579,9 @@ module poker::poker_manager {
             aptos_account::transfer(from, winner_addr, (winnerRewardDivided as u64));
             k = k + 1;
         };
+        debug::print(&string::utf8(b"Game metadata: "));
+        debug::print(game_metadata);
+        create_game(game_metadata.room_id);
     }
 
     public entry fun leave_game(from: &signer, game_id: u64) acquires GameState, UserGames {
@@ -624,6 +626,8 @@ module poker::poker_manager {
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+        let room_id = game_metadata.room_id;
+        let players = (copy game_metadata).players;
 
         let (is_player_in_game, player_index) = find_player_by_address(&game_metadata.players, &addr);
         assert!(is_player_in_game, ENOT_IN_GAME);
@@ -666,17 +670,17 @@ module poker::poker_manager {
             player.current_bet = player.current_bet + diff;
             game_metadata.pot = game_metadata.pot + diff;
         } else if (action == RAISE) {
-            
-            debug::print(&string::utf8(b"Amount has to be: "));
-            debug::print(&(game_metadata.current_bet + game_metadata.stake));
+
+            // Player can only raise to a maximum equal to the lowest balance of the other players
+            let max_raise = get_max_raise_for(addr, &players);
+            assert!(amount <= max_raise, ERAISE_TOO_HIGH);
+
             // Raise has to be at least current bet + stake
             assert!(amount >= game_metadata.current_bet + game_metadata.stake, ERAISE_TOO_LOW);
             player.current_bet = player.current_bet + amount;
             game_metadata.pot = game_metadata.pot + amount;
             game_metadata.current_bet = amount;
             game_metadata.lastRaiser = option::some<LastRaiser>(LastRaiser{playerId: addr, playerMove: action});
-            debug::print(&string::utf8(b"JUST SET Last raiser to: "));
-            debug::print(&game_metadata.lastRaiser);
         } else if (action == ALL_IN) {
             player.current_bet = player.current_bet + amount;
             game_metadata.pot = game_metadata.pot + amount;
@@ -705,10 +709,8 @@ module poker::poker_manager {
 
         if (activePlayers == 1) {
             game_metadata.winners = vector[vector::borrow(&game_metadata.players, (lastActivePlayerIndex as u64)).id];
-            // Player will call populate_card_values
         } else if (activePlayers == 0) {
             game_metadata.state = GAMESTATE_CLOSED;
-            //create_game(game_metadata.room_id);
         };
 
         // Skip folded players
@@ -763,6 +765,9 @@ module poker::poker_manager {
 
         debug::print(&string::utf8(b"Should move to next stage: "));
         debug::print(&should_move_to_next_stage);
+        if (game_metadata.state == GAMESTATE_CLOSED) {
+            create_game(room_id);
+        };
         if (should_move_to_next_stage) {
             move_to_next_stage(game_id);
         };
@@ -1210,7 +1215,7 @@ module poker::poker_manager {
         coin::register<AptosCoin>(&player4);
 
         aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
-        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000);
         aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
         aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
 
@@ -1340,38 +1345,43 @@ module poker::poker_manager {
             assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
         };
 
+        game_metadata.seed = 35;
+
             populate_card_values(admin, game_id,
         vector[
-            string::utf8(b"clubs"),    string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"diamonds"),
-            string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"clubs"),
-            string::utf8(b"clubs"),    string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"clubs"),
-            string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),   string::utf8(b"spades"),
-            string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"spades"),
-            string::utf8(b"hearts"),   string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"spades"),
-            string::utf8(b"hearts"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),   string::utf8(b"spades"),
+            string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"clubs"),
+            string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"clubs"),    string::utf8(b"hearts"),
             string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
-            string::utf8(b"clubs"),    string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
-            string::utf8(b"spades"),   string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),
-            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"clubs"),
-            string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"diamonds"),
-            string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"hearts"),   string::utf8(b"diamonds"),
+            string::utf8(b"spades"),   string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"spades"),
+            string::utf8(b"clubs"),    string::utf8(b"spades"),   string::utf8(b"hearts"),   string::utf8(b"hearts"),
+            string::utf8(b"hearts"),   string::utf8(b"hearts"),   string::utf8(b"hearts"),   string::utf8(b"diamonds"),
+            string::utf8(b"spades"),   string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"clubs"),
+            string::utf8(b"spades"),   string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"clubs"),
+            string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"diamonds"),
+            string::utf8(b"hearts"),   string::utf8(b"hearts"),   string::utf8(b"diamonds"), string::utf8(b"spades"),
+            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"clubs"),    string::utf8(b"spades"),
+            string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"hearts"),
+            string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
         ],
         vector[
-            string::utf8(b"jack"),  string::utf8(b"6"),     string::utf8(b"8"),    string::utf8(b"2"),    string::utf8(b"10"),   string::utf8(b"7"),
-            string::utf8(b"3"),     string::utf8(b"4"),     string::utf8(b"5"),    string::utf8(b"10"),   string::utf8(b"8"),    string::utf8(b"king"),
-            string::utf8(b"queen"), string::utf8(b"8"),     string::utf8(b"2"),    string::utf8(b"9"),    string::utf8(b"king"), string::utf8(b"3"),
-            string::utf8(b"5"),     string::utf8(b"8"),     string::utf8(b"ace"),  string::utf8(b"king"), string::utf8(b"6"),    string::utf8(b"jack"),
-            string::utf8(b"10"),    string::utf8(b"ace"),   string::utf8(b"5"),    string::utf8(b"5"),    string::utf8(b"4"),    string::utf8(b"7"),
-            string::utf8(b"queen"), string::utf8(b"6"),     string::utf8(b"3"),    string::utf8(b"2"),    string::utf8(b"king"), string::utf8(b"4"),
-            string::utf8(b"2"),     string::utf8(b"ace"),   string::utf8(b"9"),    string::utf8(b"jack"), string::utf8(b"7"),    string::utf8(b"ace"),
-            string::utf8(b"9"),     string::utf8(b"9"),     string::utf8(b"jack"), string::utf8(b"10"),   string::utf8(b"7"),    string::utf8(b"queen"),
-            string::utf8(b"6"),     string::utf8(b"queen"), string::utf8(b"3"),    string::utf8(b"4")
+            string::utf8(b"8"),      string::utf8(b"6"),      string::utf8(b"ace"),    string::utf8(b"jack"), string::utf8(b"2"),    
+            string::utf8(b"ace"),    string::utf8(b"4"),      string::utf8(b"jack"),   string::utf8(b"queen"),string::utf8(b"6"),    
+            string::utf8(b"8"),      string::utf8(b"7"),      string::utf8(b"2"),      string::utf8(b"3"),    string::utf8(b"queen"),
+            string::utf8(b"king"),   string::utf8(b"king"),   string::utf8(b"6"),      string::utf8(b"ace"),  string::utf8(b"king"), 
+            string::utf8(b"10"),     string::utf8(b"9"),      string::utf8(b"3"),      string::utf8(b"jack"), string::utf8(b"10"),   
+            string::utf8(b"jack"),   string::utf8(b"3"),      string::utf8(b"9"),      string::utf8(b"7"),    string::utf8(b"8"),    
+            string::utf8(b"7"),      string::utf8(b"2"),      string::utf8(b"9"),      string::utf8(b"ace"),  string::utf8(b"queen"),
+            string::utf8(b"3"),      string::utf8(b"5"),      string::utf8(b"queen"),  string::utf8(b"10"),   string::utf8(b"5"),    
+            string::utf8(b"9"),      string::utf8(b"5"),      string::utf8(b"10"),     string::utf8(b"4"),    string::utf8(b"king"),  
+            string::utf8(b"7"),      string::utf8(b"5"),      string::utf8(b"6"),      string::utf8(b"4"),    string::utf8(b"8"),    
+            string::utf8(b"2"),      string::utf8(b"4")
         ]
+
         );
         
         {
             let game_metadata = get_game_metadata_by_id(game_id);
-            debug::print(&string::utf8(b"Game metadata: "));
+            debug::print(&string::utf8(b"Game metadata X: "));
             debug::print(&game_metadata);
         };
 

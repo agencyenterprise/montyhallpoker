@@ -19,6 +19,6 @@ echo "##### Publishing module #####"
 
 aptos move publish \
 	--assume-yes \
-  --profile blush \
-  --named-addresses poker=0x423ef3020fb7a779dedc4d26b202cfd76b516fc6f441d9f015205f212c687d14
+  --profile crush \
+  --named-addresses poker=0x9f535b0ec315f49bc4e3aea04e79b28fb5077726aeb9eb09276d3ef0ad1e0953
 
