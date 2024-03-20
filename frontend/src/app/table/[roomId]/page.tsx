@@ -74,6 +74,8 @@ export default function PokerGameTable({ params }: { params: any }) {
           "Content-Type": "application/json",
         },
       });
+      alert("Game Ended!")
+
     }
   };
 

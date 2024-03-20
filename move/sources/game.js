@@ -238,6 +238,17 @@ const evaluateWinnerWithSameHandRank = (player1, player2, handRank) => {
     const { bestCombinationHighestValue: bestCombinationHighestValue1, handRank: handRank1, comparisonValue: comparisonValue1 } = player1.evaluation;
     const { bestCombinationHighestValue: bestCombinationHighestValue2, handRank: handRank2, comparisonValue: comparisonValue2 } = player2.evaluation;
     console.log(bestCombinationHighestValue1[handRank].length)
+    if (handRank === "1") {
+        if (comparisonValue1 > comparisonValue2) {
+            return player1
+        }
+        else if (comparisonValue1 < comparisonValue2) {
+            return player2
+        }
+        else {
+            return "Draw"
+        }
+    }
     if (handRank === "7") {
         bestCombinationHighestValue1[handRank] = [bestCombinationHighestValue1["2"].pop(), bestCombinationHighestValue1["4"].pop()]
         bestCombinationHighestValue2[handRank] = [bestCombinationHighestValue2["2"].pop(), bestCombinationHighestValue2["4"].pop()]
@@ -275,15 +286,13 @@ const evaluateWinnerWithSameHandRank = (player1, player2, handRank) => {
 function finalEvaluationAndWinnerDetermination() {
     // const playerCards = [{ value: "3", suit: "diamonds" }, { value: "4", suit: "diamonds" }]
     // const cardsArr = [{ value: "6", suit: "spades" }, { value: "2", suit: "diamonds" }, { value: "7", suit: "diamonds" }, { value: "8", suit: "diamonds" }, { value: "10", suit: "spades" }, ...playerCards] // Combine player's hand with community cards
-    const community = [{ value: "6", suit: "spades" },
-    { value: "6", suit: "diamonds" },
-    { value: "7", suit: "diamonds" },
-    { value: "8", suit: "diamonds" },
-    { value: "9", suit: "diamonds" }]
-    const players = [{ status: "active", id: 0, hand: [...community, { value: "6", suit: "diamonds" }, { value: "6", suit: "clubs" }] },
-    { status: "active", id: 1, hand: [...community, { value: "10", suit: "diamonds" }, { value: "7", suit: "clubs" }] },
-    { status: "activ", id: 2 },
-    { status: "activ", id: 3 }];
+    const community = [{ value: "2", suit: "spades" },
+    { value: "10", suit: "diamonds" },
+    { value: "7", suit: "clubs" }]
+    const players = [{ status: "active", id: 0, hand: [...community, { value: "3", suit: "hearts" }, { value: "4", suit: "diamonds" }] },
+    { status: "active", id: 1, hand: [...community, { value: "2", suit: "spades" }, { value: "7", suit: "clubs" }] },
+    { status: "active", id: 2, hand: [...community, { value: "8", suit: "hearts" }, { value: "10", suit: "clubs" }] },
+    { status: "active", id: 3, hand: [...community, { value: "3", suit: "spades" }, { value: "jack", suit: "spades" }] }];
     let evaluations =
         players.filter(player => player.status === "active")
             .map(player => ({
