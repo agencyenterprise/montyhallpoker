@@ -13,16 +13,15 @@ import {
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { getAptosClient } from "../../../utils/aptosClient";
+import {
+  getAptosClient,
+  getAptosWallet,
+  toAptos,
+} from "../../../utils/aptosClient";
 import Button from "@/components/Button";
 import { parseAddress } from "@/utils/address";
-const getAptosWallet = (): any => {
-  if ("aptos" in window) {
-    return window.aptos;
-  } else {
-    window.open("https://petra.app/", `_blank`);
-  }
-};
+import { useRouter } from "next/navigation";
+import { BuyinIcon, MoneyIcon } from "@/components/Icons";
 
 const ACTIONS = {
   FOLD: 0,
@@ -40,24 +39,21 @@ interface PlayerCards {
 }
 
 export default function PokerGameTable({ params }: { params: any }) {
+  const { connected } = useWallet();
   const { roomId } = params;
-  const [loaded, setLoaded] = useState(false);
   const [me, setMe] = useState(null);
   const [meIndex, setMeIndex] = useState(0);
-  const [currentPlayer, setCurrentPlayer] = useState(null);
-  const [playerOne, setPlayerOne] = useState(null);
-  const [playerTwo, setPlayerTwo] = useState(null);
-  const [playerThree, setPlayerThree] = useState(null);
-  const [playerFour, setPlayerFour] = useState(null);
   const [communityCards, setCommunityCards] = useState<PlayerCards[]>([]);
   const [currentPot, setCurrentPot] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [stop, setStop] = useState(false);
+
   const controller = new AbortController();
+  const router = useRouter();
+
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
     const wallet = getAptosWallet();
@@ -76,6 +72,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     stop,
     controller,
   });
+
   useEffect(() => {
     console.log(gameState);
   }, [gameState]);
@@ -94,6 +91,10 @@ export default function PokerGameTable({ params }: { params: any }) {
       setHandRevealed(true);
     }
   }, [gameStarted, gameState]);
+
+  if (!connected) {
+    router.push("/");
+  }
 
   const revealComunityCards = async (gameId: string) => {
     if (!gameId) {
@@ -120,13 +121,12 @@ export default function PokerGameTable({ params }: { params: any }) {
         setMe(account.address);
 
         setGameStarted(true);
-        setCurrentPot(Number(gameState?.pot) / 10 ** 8);
+        setCurrentPot(toAptos(gameState?.pot!));
       }
     } catch (error) {
       // { code: 4001, message: "User rejected the request."}
       console.error(error);
     }
-    setLoaded(true);
   };
 
   const revealCurrentUserCard = async () => {
@@ -168,6 +168,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
           <PlayerBanner
             isMe={false}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={(meIndex + 1) % 4}
             stack={1000}
@@ -175,6 +176,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           />
           <PlayerBanner
             isMe={false}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={(meIndex + 2) % 4}
             stack={1000}
@@ -184,6 +186,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
           <PlayerBanner
             isMe={true}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={meIndex % 4}
             stack={1000}
@@ -192,6 +195,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           />
           <PlayerBanner
             isMe={false}
+            gameState={gameState!}
             currentIndex={gameState?.currentPlayerIndex || 0}
             playerIndex={(meIndex + 3) % 4}
             stack={1000}
@@ -210,8 +214,8 @@ export default function PokerGameTable({ params }: { params: any }) {
         <div className="absolute -bottom-20 flex gap-x-4">
           <ActionButtons meIndex={meIndex} gameState={gameState!} />
         </div>
-        <div className="absolute right-40 h-full flex justify-center items-center text-white">
-          Pot: {currentPot.toFixed(2)} APT
+        <div className="absolute right-40 h-full flex justify-center gap-x-2 items-center text-white">
+          <Stack stack={currentPot} />
         </div>
         <PokerTable />
       </div>
@@ -219,6 +223,11 @@ export default function PokerGameTable({ params }: { params: any }) {
   );
 }
 
+function PokerStackIcon() {
+  return (
+    <Image src="/poker-stacks.png" alt="Poker Stacks" width={20} height={15} />
+  );
+}
 interface ActionButtonsProps {
   gameState: Maybe<GameState>;
   meIndex: number;
@@ -274,7 +283,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
         </Button>
         <input
           className="text-center bg-[#0F172A] text-white w-[100px] h-full rounded-[10px] border border-cyan-400"
-          value={Number(raiseValue / 10 ** 8).toFixed(2)}
+          value={toAptos(raiseValue).toFixed(2)}
         />
         <Button
           onClick={() =>
@@ -284,9 +293,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
           +
         </Button>
       </div>
-      <Button
-        onClick={() => performAction(ACTIONS.RAISE, raiseValue)}
-      >
+      <Button onClick={() => performAction(ACTIONS.RAISE, raiseValue)}>
         Raise
       </Button>
       <div className="flex gap-x-4 w-full">
@@ -329,6 +336,7 @@ interface PlayerBannerProps {
   isMe: boolean;
   currentIndex: number;
   playerIndex: number;
+  gameState: GameState;
   stack: number;
   cards?: PlayerCards[];
   position: number;
@@ -337,17 +345,37 @@ function PlayerBanner({
   isMe,
   currentIndex,
   playerIndex: index,
-  stack,
+  gameState,
   cards,
   position,
 }: PlayerBannerProps) {
   const width = isMe ? "w-[230px]" : "w-[174px]";
-  const playerIndex = index % 4;
+  const playerIndex = index;
+  if (typeof gameState?.players[playerIndex] === "undefined") {
+    return (
+      <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
+        {playerIndex == currentIndex && <TurnToken position={position} />}
+        <div
+          className={classnames(
+            "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
+            width
+          )}
+        ></div>
+      </div>
+    );
+  }
+  const playerBet = Number(gameState.players[playerIndex].current_bet);
+  const playerStack = gameState.players[playerIndex];
+  const playerCards = gameState.players[playerIndex].hand;
 
   return (
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
       {playerIndex == currentIndex && <TurnToken position={position} />}
-      <Cards cards={cards} />
+
+      <div className={classnames("absolute -top-[120px] ")}>
+        <Stack stack={playerBet} />
+      </div>
+      {playerCards.length == 2 && <Cards cards={cards} />}
       <div
         className={classnames(
           "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
@@ -365,8 +393,8 @@ function PlayerBanner({
           <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
           <div>
             <div className="flex gap-x-1 text-xs">
-              <Image src="/stack-icon.svg" height="13" width="13" alt="icon" />
-              <span>{stack}</span>
+              <StackIcon />
+              <span>{1000}</span>
             </div>
 
             <div className="flex gap-x-1 text-xs">
@@ -376,6 +404,28 @@ function PlayerBanner({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function StackIcon() {
+  return <Image src="/stack-icon.svg" height="13" width="13" alt="icon" />;
+}
+interface StackProps {
+  stack: number;
+}
+
+function Stack({ stack }: StackProps) {
+  if (stack == 0) {
+    return;
+  }
+  return (
+    <div className="flex gap-x-2">
+      <PokerStackIcon />{" "}
+      <span className="flex gap-x-2 text-white rounded-full bg-[#0F172A] px-2 py-[6px] text-xs">
+        <StackIcon />
+        {stack.toFixed(2)}
+      </span>
     </div>
   );
 }
