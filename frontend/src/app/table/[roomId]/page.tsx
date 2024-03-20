@@ -3,25 +3,16 @@
 import classnames from "classnames";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import {
-  CONTRACT_ADDRESS,
-  GameState,
-  GameStage,
-  getGameByRoomId,
-  GameStatus,
-} from "../../../../controller/contract";
+import { CONTRACT_ADDRESS, GameState, GameStage, getGameByRoomId, GameStatus } from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import {
-  getAptosClient,
-  getAptosWallet,
-  toAptos,
-} from "../../../utils/aptosClient";
+import { getAptosClient, getAptosWallet, toAptos } from "../../../utils/aptosClient";
 import Button from "@/components/Button";
 import { parseAddress } from "@/utils/address";
 import { useRouter } from "next/navigation";
 import { skip } from "node:test";
+import { playSound } from "../../../utils/audio";
 
 const ACTIONS = {
   FOLD: 0,
@@ -59,9 +50,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     const game = await getGameByRoomId(roomId);
     const wallet = getAptosWallet();
     const { address } = await wallet?.account();
-    const mePlayer = game?.players.find(
-      (player) => parseAddress(player.id) === parseAddress(address)
-    )!;
+    const mePlayer = game?.players.find((player) => parseAddress(player.id) === parseAddress(address))!;
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
@@ -75,7 +64,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         },
       });
     } else if (game?.state == GameStatus.CLOSE) {
-      alert("Game Ended!")
+      alert("Game Ended!");
     }
   };
 
@@ -94,11 +83,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   }, [gameState]);
 
   useEffect(() => {
-    if (
-      gameState &&
-      gameState?.state === GameStatus.INPROGRESS &&
-      !handRevealed
-    ) {
+    if (gameState && gameState?.state === GameStatus.INPROGRESS && !handRevealed) {
       revealCurrentUserCard();
       setHandRevealed(true);
     }
@@ -216,11 +201,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         </div>
         <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
           {communityCards.map((card, index) => (
-            <Card
-              valueString={`${card.suit}_${card.value}`}
-              size="large"
-              key={index}
-            />
+            <Card valueString={`${card.suit}_${card.value}`} size="large" key={index} />
           ))}
         </div>
         <div className="absolute -bottom-20 flex gap-x-4">
@@ -236,9 +217,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 }
 
 function PokerStackIcon() {
-  return (
-    <Image src="/poker-stacks.png" alt="Poker Stacks" width={20} height={15} />
-  );
+  return <Image src="/poker-stacks.png" alt="Poker Stacks" width={20} height={15} />;
 }
 interface ActionButtonsProps {
   gameState: Maybe<GameState>;
@@ -247,9 +226,7 @@ interface ActionButtonsProps {
 
 function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   const { signAndSubmitTransaction } = useWallet();
-  const [raiseValue, setRaiseValue] = useState<number>(
-    Number(gameState?.stake) || 0
-  );
+  const [raiseValue, setRaiseValue] = useState<number>(Number(gameState?.stake) || 0);
   const maxValue = Number();
   const skipInactivePlayer = async () => {
     try {
@@ -278,7 +255,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
     } catch (error: any) {
       console.error(error);
     }
-  }
+  };
   // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
   const performAction = async (action: number, amount: number) => {
     if (!gameState?.id) {
@@ -296,6 +273,11 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
           functionArguments: [`${gameState.id}`, `${action}`, `${amount}`],
         },
       });
+
+      if (action === ACTIONS.RAISE || action === ACTIONS.CALL) {
+        playSound("chips");
+      }
+
       await aptosClient.waitForTransaction({
         transactionHash: response.hash,
       });
@@ -312,34 +294,18 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   return (
     <div className="flex flex-col gap-y-4">
       <div className="flex gap-x-2 h-fit">
-        <Button
-          disabled={raiseValue <= 0}
-          onClick={() =>
-            setRaiseValue((prev) => prev - Number(gameState?.stake))
-          }
-        >
+        <Button disabled={raiseValue <= 0} onClick={() => setRaiseValue((prev) => prev - Number(gameState?.stake))}>
           -
         </Button>
         <input
           className="text-center bg-[#0F172A] text-white w-[100px] h-full rounded-[10px] border border-cyan-400"
           value={toAptos(raiseValue).toFixed(2)}
         />
-        <Button
-          onClick={() =>
-            setRaiseValue((prev) => prev + Number(gameState?.stake))
-          }
-        >
-          +
-        </Button>
+        <Button onClick={() => setRaiseValue((prev) => prev + Number(gameState?.stake))}>+</Button>
       </div>
-      <Button onClick={() => performAction(ACTIONS.RAISE, raiseValue)}>
-        Raise
-      </Button>
+      <Button onClick={() => performAction(ACTIONS.RAISE, raiseValue)}>Raise</Button>
       <div className="flex gap-x-4 w-full">
-        <Button
-          className="w-full"
-          onClick={() => performAction(ACTIONS.FOLD, 0)}
-        >
+        <Button className="w-full" onClick={() => performAction(ACTIONS.FOLD, 0)}>
           Fold
         </Button>
         {Number(gameState?.current_bet) > 0 && (
@@ -353,19 +319,13 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
           </Button>
         )}
         {Number(gameState?.current_bet) === 0 && (
-          <Button
-            className="w-full"
-            onClick={() => performAction(ACTIONS.CHECK, 0)}
-          >
+          <Button className="w-full" onClick={() => performAction(ACTIONS.CHECK, 0)}>
             Check
           </Button>
         )}
       </div>
       <div className="flex gap-x-4 w-full" title="You can skip an inactive player after 60s">
-        <Button
-          className="w-full"
-          onClick={skipInactivePlayer}
-        >
+        <Button className="w-full" onClick={skipInactivePlayer}>
           Skip current player
         </Button>
       </div>
@@ -374,9 +334,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
 }
 
 function PokerTable() {
-  return (
-    <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />
-  );
+  return <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />;
 }
 
 interface PlayerBannerProps {
@@ -388,14 +346,7 @@ interface PlayerBannerProps {
   cards?: PlayerCards[];
   position: number;
 }
-function PlayerBanner({
-  isMe,
-  currentIndex,
-  playerIndex: index,
-  gameState,
-  cards,
-  position,
-}: PlayerBannerProps) {
+function PlayerBanner({ isMe, currentIndex, playerIndex: index, gameState, cards, position }: PlayerBannerProps) {
   const width = isMe ? "w-[230px]" : "w-[174px]";
   const playerIndex = index;
   if (typeof gameState?.players[playerIndex] === "undefined") {
@@ -429,13 +380,7 @@ function PlayerBanner({
           width
         )}
       >
-        <Image
-          src="/player-avatar.svg"
-          alt="Avatar"
-          width={81}
-          height={81}
-          className=""
-        />
+        <Image src="/player-avatar.svg" alt="Avatar" width={81} height={81} className="" />
         <div className="text-white flex flex-col justify-between py-2">
           <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
           <div>
@@ -498,24 +443,13 @@ function Cards({ cards }: CardsProps) {
   const cardPosition = cards?.length ? "left-4" : `left-10`;
 
   return (
-    <div
-      className={classnames(
-        "w-[91px] h-[91px] z-[1] text-white absolute -top-10",
-        cardPosition
-      )}
-    >
+    <div className={classnames("w-[91px] h-[91px] z-[1] text-white absolute -top-10", cardPosition)}>
       <div className="flex relative mx-auto">
         {!cards?.length && <BackCards />}
         {cards?.length && (
           <div className="absolute flex gap-x-[10px] -top-10">
-            <Card
-              valueString={`${cards[0].suit}_${cards[0].value}`}
-              size="large"
-            />
-            <Card
-              valueString={`${cards[1].suit}_${cards[1].value}`}
-              size="large"
-            />
+            <Card valueString={`${cards[0].suit}_${cards[0].value}`} size="large" />
+            <Card valueString={`${cards[1].suit}_${cards[1].value}`} size="large" />
           </div>
         )}
       </div>
@@ -526,31 +460,13 @@ function Cards({ cards }: CardsProps) {
 function BackCards() {
   return (
     <div>
-      <Image
-        src="/card-back.svg"
-        alt="Card Back"
-        width={61}
-        height={91}
-        className="absolute z-[2]"
-      />
-      <Image
-        src="/card-back.svg"
-        alt="Card Back"
-        width={61}
-        height={91}
-        className="absolute z-[1] left-[30px]"
-      />
+      <Image src="/card-back.svg" alt="Card Back" width={61} height={91} className="absolute z-[2]" />
+      <Image src="/card-back.svg" alt="Card Back" width={61} height={91} className="absolute z-[1] left-[30px]" />
     </div>
   );
 }
 
-function Card({
-  valueString,
-  size,
-}: {
-  valueString: string;
-  size: "small" | "large";
-}) {
+function Card({ valueString, size }: { valueString: string; size: "small" | "large" }) {
   const width = size === "small" ? 61 : 95;
   const height = size === "small" ? 91 : 144;
   return (
@@ -561,12 +477,7 @@ function Card({
         height: `${height}px`,
       }}
     >
-      <Image
-        src={`/cards/${valueString}.png`}
-        alt="Card Club"
-        width={width}
-        height={height}
-      />
+      <Image src={`/cards/${valueString}.png`} alt="Card Club" width={width} height={height} />
     </div>
   );
 }
