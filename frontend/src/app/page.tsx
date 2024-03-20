@@ -8,6 +8,8 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useRouter } from "next/navigation";
 import { Player, getGameByRoomId } from "../../controller/contract";
 import Button from "@/components/Button";
+import { parseAddress } from "@/utils/address";
+import { PlayersIcon, BuyinIcon, MoneyIcon } from "@/components/Icons";
 
 interface Room {
   id: string;
@@ -110,7 +112,9 @@ function GameRoomLobby() {
       id: room.id,
       name: room.name,
       gameId: game?.id || "",
-      hasMe: !!game?.players.find((player) => player.id === account.address),
+      hasMe: !!game?.players.find(
+        (player) => parseAddress(player.id) === parseAddress(account.address)
+      ),
       disabled: false,
       ante: Number(game?.stake || 0),
       players: game?.players || [],
@@ -165,7 +169,7 @@ function GameRoomBadge({ room }: GameRoomBadgeProps) {
     const wallet = getAptosWallet();
     const account = await wallet?.account();
     const meInRoom = room.players.find(
-      (player) => player.id === account.address
+      (player) => parseAddress(player.id) === parseAddress(account.address)
     );
 
     if (meInRoom) {
@@ -226,20 +230,5 @@ function GameRoomBadge({ room }: GameRoomBadgeProps) {
         )}
       </div>
     </div>
-  );
-}
-function MoneyIcon() {
-  return (
-    <Image src="/money-icon.svg" width={14} height={14} alt="Money icon" />
-  );
-}
-function PlayersIcon() {
-  return (
-    <Image src="/players-icon.svg" width={14} height={14} alt="Players icon" />
-  );
-}
-function BuyinIcon() {
-  return (
-    <Image src="/buyin-icon.svg" width={14} height={14} alt="Buyin icon" />
   );
 }
