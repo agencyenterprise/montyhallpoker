@@ -34,7 +34,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   const { connected } = useWallet();
   const { signAndSubmitTransaction } = useWallet();
   const { roomId } = params;
-  const [me, setMe] = useState(null);
+  const [me, setMe] = useState<string>("");
   const [meIndex, setMeIndex] = useState(0);
   const [communityCards, setCommunityCards] = useState<PlayerCards[]>([]);
   const [currentPot, setCurrentPot] = useState(0);
@@ -65,15 +65,20 @@ export default function PokerGameTable({ params }: { params: any }) {
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
     if (game?.stage == GameStage.Showdown && game.state != GameStatus.CLOSE) {
-      fetch(`/api/reveal/all`, {
+      const response = await fetch(`/api/reveal/all`, {
         method: "POST",
         body: JSON.stringify({ gameId: Number(game.id) }),
         headers: {
           "Content-Type": "application/json",
         },
       });
+      const data = await response.json();
+      if (data.message == "OK") {
+        setStop(true);
+        playSound("winner");
+      }
     } else if (game?.state == GameStatus.CLOSE) {
-      alert("Game Ended!");
+      alert("Game Ended! Winner is " + game?.winners?.join(", "));
     }
   };
 
@@ -85,12 +90,6 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   useEffect(() => {
     console.log(gameState);
-  }, [gameState]);
-
-  useEffect(() => {
-    if (gameState?.state == GameStatus.CLOSE) {
-      setStop(true);
-    }
   }, [gameState]);
 
   const previousGameState = usePrevious<Maybe<GameState> | undefined>(gameState);
@@ -107,17 +106,27 @@ export default function PokerGameTable({ params }: { params: any }) {
   }, [gameStarted, gameState]);
 
   useEffect(() => {
-    if (gameState?.state == GameStatus.INPROGRESS) {
+    if (gameState?.state == GameStatus.INPROGRESS && previousGameState?.state == GameStatus.INPROGRESS) {
       console.log("turn ", gameState?.turn, " me", me, " previous turn", previousGameState?.turn);
-      if (gameState?.turn == me && previousGameState?.turn != me) {
+      if (
+        parseAddress(gameState?.turn) == parseAddress(me) &&
+        parseAddress(previousGameState?.turn) != parseAddress(me)
+      ) {
         if (document.hidden) {
           playSound("your-turn-blurred");
         } else {
           playSound("your-turn");
         }
-      } else if (gameState?.turn != me && previousGameState?.turn != me && gameState?.turn != previousGameState?.turn) {
+      } else if (
+        parseAddress(gameState?.turn) != parseAddress(me) &&
+        parseAddress(previousGameState?.turn) != parseAddress(me) &&
+        parseAddress(gameState?.turn) != parseAddress(previousGameState?.turn)
+      ) {
         // determine last action made
-        if (+gameState?.current_bet > +previousGameState?.current_bet) {
+        if (gameState?.players?.[previousGameState?.currentPlayerIndex]?.status == 1) {
+          playSound("fold", 0.7);
+          console.log("fold");
+        } else if (+gameState?.current_bet > +previousGameState?.current_bet) {
           playSound("more-chips");
           console.log("raise");
         } else if (+gameState?.current_bet == +previousGameState?.current_bet && +gameState?.current_bet > 0) {
@@ -130,9 +139,6 @@ export default function PokerGameTable({ params }: { params: any }) {
         ) {
           playSound("wood-knock");
           console.log("check");
-        } else if (gameState?.players?.[previousGameState?.currentPlayerIndex]?.status == 1) {
-          playSound("fold", 0.7);
-          console.log("fold");
         }
       }
     }
@@ -191,7 +197,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   };
 
   const revealCurrentUserCard = async () => {
-    const message = "Sign this to reveal your cards";
+    const message = "By signing this transaction you'll be able to see your cards.";
     const nonce = Date.now().toString();
     const aptosClient = getAptosWallet();
     const response = await aptosClient.signMessage({
@@ -223,6 +229,10 @@ export default function PokerGameTable({ params }: { params: any }) {
       playSound("harp");
     }
   };
+
+  if (gameState?.stage == GameStage.Showdown) {
+    return <div>Game Ended</div>;
+  }
 
   return (
     <div className="h-full w-full flex items-center justify-center relative">
@@ -350,7 +360,6 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
           break;
         case ACTIONS.CHECK:
           playSound("wood-knock");
-          alert("action from player");
           break;
         case ACTIONS.FOLD:
           playSound("fold", 0.7);

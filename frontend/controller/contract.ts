@@ -59,7 +59,7 @@ export type GameState = {
   starter: number;
   state: GameStatus;
   turn: string;
-  winner: string;
+  winners: string[];
 };
 
 export type ChainResponse = {
