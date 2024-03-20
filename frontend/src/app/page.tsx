@@ -93,11 +93,11 @@ function GameRoomLobby() {
     );
     const isMeInAnyGame = !!lobbyData.find((room) => room.hasMe);
     const processedLobbyData = lobbyData.map((room) => {
+      console.log((!room.hasMe && isMeInAnyGame), room.hasMe, isMeInAnyGame, room.players.length, MAX_PLAYER_COUNT)
       return {
         ...room,
         disabled:
-          room.players.length >= MAX_PLAYER_COUNT ||
-          (!room.hasMe && isMeInAnyGame),
+          !room.hasMe || (room.players.length <= MAX_PLAYER_COUNT && !room.hasMe),
       };
     });
     setAllRoomsData(processedLobbyData);
@@ -207,6 +207,7 @@ function GameRoomBadge({ room }: GameRoomBadgeProps) {
         className={classnames(
           `font-bold text-white h-[142px] rounded-[10px] leading-[19px] p-4 flex justify-between ${style}`
         )}
+        title={room.disabled ? "You must finish your game first" : ""}
       >
         <div className="flex flex-col gap-y-[10px] text-justify">
           <h1>{room.name}</h1>

@@ -8,7 +8,7 @@ import {
     Aptos
 } from "@aptos-labs/ts-sdk";
 import { getGameMapping } from "./index"
-import { getGameById, GameStage } from "./contract";
+import { getGameById, GameStatus } from "./contract";
 type Hand = { suit: string; value: string };
 
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS!
@@ -20,7 +20,7 @@ export const revealGameCards = async (gameId: number | string) => {
     if (!game) {
         throw new Error("No game found!");
     }
-    if (game.stage == GameStage.CLOSE) {
+    if (game.state == GameStatus.CLOSE) {
         throw new Error("Game is already closed!");
     }
     const config = new AptosConfig({ network: Network.RANDOMNET }); // default network is devnet

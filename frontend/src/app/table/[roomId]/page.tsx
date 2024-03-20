@@ -2,13 +2,13 @@
 
 import classnames from "classnames";
 import Image from "next/image";
-import { cn } from "@/utils/styling";
 import { useEffect, useState } from "react";
 import {
   CONTRACT_ADDRESS,
   GameState,
   GameStage,
   getGameByRoomId,
+  GameStatus,
 } from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
@@ -21,7 +21,7 @@ import {
 import Button from "@/components/Button";
 import { parseAddress } from "@/utils/address";
 import { useRouter } from "next/navigation";
-import { BuyinIcon, MoneyIcon } from "@/components/Icons";
+import { skip } from "node:test";
 
 const ACTIONS = {
   FOLD: 0,
@@ -40,6 +40,7 @@ interface PlayerCards {
 
 export default function PokerGameTable({ params }: { params: any }) {
   const { connected } = useWallet();
+  const { signAndSubmitTransaction } = useWallet();
   const { roomId } = params;
   const [me, setMe] = useState(null);
   const [meIndex, setMeIndex] = useState(0);
@@ -65,6 +66,15 @@ export default function PokerGameTable({ params }: { params: any }) {
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
     await revealComunityCards(game!.id!);
+    if (game?.stage == GameStage.Showdown && game.state != GameStatus.CLOSE) {
+      fetch(`/api/reveal/all`, {
+        method: "POST",
+        body: JSON.stringify({ gameId: Number(game.id) }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
   };
 
   usePollingEffect(async () => await gameWorker(), [], {
@@ -84,7 +94,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   useEffect(() => {
     if (
       gameState &&
-      gameState?.state === GameStage.INPROGRESS &&
+      gameState?.state === GameStatus.INPROGRESS &&
       !handRevealed
     ) {
       revealCurrentUserCard();
@@ -239,7 +249,34 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
     Number(gameState?.stake) || 0
   );
   const maxValue = Number();
+  const skipInactivePlayer = async () => {
+    try {
+      if (!gameState?.id) {
+        return;
+      }
+      const currentUnixTimestamp = Math.floor(Date.now() / 1000);
+      const lastActionUnixTimestamp = Number(gameState!.last_action_timestamp);
+      if (currentUnixTimestamp - lastActionUnixTimestamp < 60) {
+        return;
+      }
+      const wallet = getAptosWallet();
+      const account = await wallet?.account();
+      const response = await signAndSubmitTransaction({
+        sender: account.address,
 
+        data: {
+          function: `${CONTRACT_ADDRESS}::poker_manager::skip_inactive_player`,
+          typeArguments: [],
+          functionArguments: [`${gameState!.id!}`],
+        },
+      });
+      await aptosClient.waitForTransaction({
+        transactionHash: response.hash,
+      });
+    } catch (error: any) {
+      console.error(error);
+    }
+  }
   // 0 FOLD, 1 CHECK, 2 CALL, 3 RAISE, 4 ALL_IN
   const performAction = async (action: number, amount: number) => {
     if (!gameState?.id) {
@@ -321,6 +358,14 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
             Check
           </Button>
         )}
+      </div>
+      <div className="flex gap-x-4 w-full" title="You can skip an inactive player after 60s">
+        <Button
+          className="w-full"
+          onClick={skipInactivePlayer}
+        >
+          Skip current player
+        </Button>
       </div>
     </div>
   );

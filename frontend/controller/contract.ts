@@ -28,7 +28,7 @@ export enum GameStage {
   River = 3,
   Showdown = 4,
 }
-export enum GameStage {
+export enum GameStatus {
   OPEN = "0",
   INPROGRESS = "1",
   CLOSE = "2",
@@ -57,7 +57,7 @@ export type GameState = {
   stage: GameStage;
   stake: string;
   starter: number;
-  state: GameStage;
+  state: GameStatus;
   turn: string;
   winner: string;
 };
@@ -66,9 +66,7 @@ export type ChainResponse = {
   vec: any[];
 };
 
-export const getGameById = async (
-  gameId: number
-): Promise<Maybe<GameState>> => {
+export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => {
   try {
     const game = await client.view({
       payload: {
@@ -82,9 +80,7 @@ export const getGameById = async (
   }
 };
 
-export const getGameByRoomId = async (
-  roomId: string
-): Promise<Maybe<GameState>> => {
+export const getGameByRoomId = async (roomId: string): Promise<Maybe<GameState>> => {
   try {
     const game = (await client.view({
       payload: {
