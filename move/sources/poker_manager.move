@@ -551,15 +551,33 @@ module poker::poker_manager {
 
             let winner_addr = vector::borrow(&game_metadata.players, winner_index).id;
 
+            let housePot = fixed_point64::multiply_u128((game_metadata.pot as u128), fixed_point64::create_from_rational(1, 100));
+
+            debug::print(&string::utf8(b"HouseRRR Pot: "));
+            debug::print(&housePot);
+
+            debug::print(&string::utf8(b"Metadata PotSSSS: "));
+            debug::print(&game_metadata.pot);
+
+            let winnerReward = (game_metadata.pot as u128) - housePot;
+            let winnerRewardDivided = fixed_point64::multiply_u128(winnerReward, fixed_point64::create_from_rational(1, (vector::length(&winners) as u128)));
+
+            debug::print(&string::utf8(b"House Pot: "));
+            debug::print(&housePot);
+
+            debug::print(&string::utf8(b"Reward: "));
+
+            debug::print(&housePot);
+
+            debug::print(&string::utf8(b"Winner reward divided: "));
+
+            debug::print(&winnerRewardDivided);
+
+            debug::print(&k);
+
             vector::push_back(&mut game_metadata.winners, winner_addr);
 
-            // pot divided by number of winners
-            let pot_divided = fixed_point64::multiply_u128((game_metadata.pot as u128), fixed_point64::create_from_rational(1, (vector::length(&winners) as u128)));
-            debug::print(&string::utf8(b"Pot divided: "));
-            debug::print(&pot_divided);
-            debug::print(&string::utf8(b"Admin balance: "));
-            debug::print(&coin::balance<AptosCoin>(@poker));
-            aptos_account::transfer(from, winner_addr, (pot_divided as u64));
+            aptos_account::transfer(from, winner_addr, (winnerRewardDivided as u64));
             k = k + 1;
         };
     }
@@ -943,11 +961,7 @@ module poker::poker_manager {
 
                     // Now you can use the copied value
                     vector::push_back(array, key_value);
-                    debug::print(&string::utf8(b"Added Two Pair: "));
-                    debug::print(key);
                 } else {
-                    debug::print(&string::utf8(b"Added One Pair: "));
-                    debug::print(key);
                     let array = simple_map::borrow_mut(&mut bestCombinationHighestValue, &2);
                     vector::push_back(array, *key);
                 };
@@ -1071,10 +1085,6 @@ module poker::poker_manager {
         let bestCombinationHighestValue2Array = simple_map::borrow(&bestCombinationHighestValue2, &handRank);
         let bestCombinationHighestValue1_len = vector::length(bestCombinationHighestValue1Array);
         let bestCombinationHighestValue2_len = vector::length(bestCombinationHighestValue2Array);
-        debug::print(&string::utf8(b"Best combination highest value 1: "));
-        debug::print(&bestCombinationHighestValue1_len);
-        debug::print(&string::utf8(b"Best combination highest value 2: "));
-        debug::print(&bestCombinationHighestValue2_len);
         let bestCombinationHighestValue1_last = vector::borrow(bestCombinationHighestValue1Array, (bestCombinationHighestValue1_len - 1));
         let bestCombinationHighestValue2_last = vector::borrow(bestCombinationHighestValue2Array, (bestCombinationHighestValue2_len - 1));
 
@@ -1129,10 +1139,6 @@ module poker::poker_manager {
             i = i + 1;
         };
 
-        debug::print(&string::utf8(b"Evaluations: "));
-        debug::print(&evaluations);
-        debug::print(&string::utf8(b"JOHNNY"));
-
         assert!(vector::length(&evaluations) > 0, EINVALID_GAME);
 
         // Initialize tracking for potential winners
@@ -1176,6 +1182,213 @@ module poker::poker_manager {
       T E S T   F U N C T I O N S
     =================================
     */
+
+    #[test(admin = @poker, aptos_framework = @0x1, account1 = @0x3, account2 = @0x4, account3 = @0x5, account4 = @0x6)]
+    fun test_join_game(account1: &signer, account2: &signer, account3: &signer, account4: &signer,
+    admin: &signer, aptos_framework: &signer)
+    acquires GameState, UserGames {
+        // Setup 
+
+        randomness::initialize_for_testing(aptos_framework);
+        randomness::set_seed(x"0000000000000000000000000000000000000000000000000000000000000000");
+
+        timestamp::set_time_has_started_for_testing(aptos_framework);
+        timestamp::update_global_time_for_test_secs(1710563686);
+
+        let (burn_cap, mint_cap) = aptos_framework::aptos_coin::initialize_for_test(aptos_framework);
+        let aptos_framework_address = signer::address_of(aptos_framework);
+        account::create_account_for_test(aptos_framework_address);
+
+        let player1 = account::create_account_for_test(signer::address_of(account1));
+        let player2 = account::create_account_for_test(signer::address_of(account2));
+        let player3 = account::create_account_for_test(signer::address_of(account3));
+        let player4 = account::create_account_for_test(signer::address_of(account4));
+
+        coin::register<AptosCoin>(&player1);
+        coin::register<AptosCoin>(&player2);
+        coin::register<AptosCoin>(&player3);
+        coin::register<AptosCoin>(&player4);
+
+        aptos_coin::mint(aptos_framework, signer::address_of(account1), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account2), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account3), 90000000000);
+        aptos_coin::mint(aptos_framework, signer::address_of(account4), 90000000000);
+
+        init_module(admin);
+        let game_id = 1;
+
+        {
+            let pre_game = get_game_metadata_by_id(game_id);
+            assert!(pre_game.state == GAMESTATE_OPEN, 0);
+            assert!(vector::length(&pre_game.players) == 0, 0);
+            assert!(vector::length(&pre_game.community) == 0, 0);
+        };
+
+        // Simulate Joining
+        join_game(account1, 1, 5000000);
+        join_game(account2, 1, 6000000);
+        join_game(account3, 1, 7000000);
+        join_game(account4, 1, 8000000);
+
+        let game_metadata = get_game_metadata_by_id(game_id);
+
+        //debug::print(&game_metadata);
+
+        // Make sure the game is in the global state and has the correct number of players
+        assert!(game_metadata.id == copy game_id, EINVALID_GAME);
+        assert!(game_metadata.state == GAMESTATE_IN_PROGRESS, EINVALID_GAME);
+        assert!(game_metadata.stage == STAGE_PREFLOP, EINVALID_GAME);
+        assert!(vector::length(&game_metadata.players) == 4, EINVALID_GAME);
+        assert!(vector::length(&game_metadata.community) == 0, EINVALID_GAME);
+
+        {
+            // Assert each player has 2 cards
+            let player1 = vector::borrow(&game_metadata.players, 0);
+            let player2 = vector::borrow(&game_metadata.players, 1);
+            let player3 = vector::borrow(&game_metadata.players, 2);
+            let player4 = vector::borrow(&game_metadata.players, 3);
+            assert!(vector::length(&player1.hand) == 2, EINVALID_GAME);
+            assert!(vector::length(&player2.hand) == 2, EINVALID_GAME);
+            assert!(vector::length(&player3.hand) == 2, EINVALID_GAME);
+            assert!(vector::length(&player4.hand) == 2, EINVALID_GAME);
+        };
+
+        debug::print(&string::utf8(b"Game stage: "));
+        debug::print(&game_metadata.stage);
+
+        // Actions
+        {
+            perform_action(account3, game_id, RAISE, 8000000);
+            perform_action(account4, game_id, CALL, 8000000);
+            perform_action(account1, game_id, CALL, 8000000);
+            perform_action(account2, game_id, RAISE, 20000000);
+            perform_action(account3, game_id, FOLD, 0);
+            perform_action(account4, game_id, CALL, 20000000 - 8000000);
+            perform_action(account1, game_id, FOLD, 0);
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_FLOP, EINVALID_GAME);
+        };
+
+        /* {
+            let gamestate = borrow_global_mut<GameState>(@poker);
+            let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
+
+            let num_players = vector::length(&game_metadata.players);
+            let i = 0;
+            while (i < num_players) {
+                let player = vector::borrow_mut(&mut game_metadata.players, i);
+
+                // Instead of a match statement, use if-else to update player hands based on the index
+                if (i == 0) {
+                    player.hand = vector[Card{cardId: 0, suit_string: b"hearts", value_string: b"3"}, Card{cardId: 1, suit_string: b"diamonds", value_string: b"4"}];
+                } else if (i == 1) {
+                    player.hand = vector[Card{cardId: 2, suit_string: b"clubs", value_string: b"7"}, Card{cardId: 3, suit_string: b"spades", value_string: b"2"}];
+                } else if (i == 2) {
+                    player.hand = vector[Card{cardId: 4, suit_string: b"hearts", value_string: b"8"}, Card{cardId: 5, suit_string: b"clubs", value_string: b"10"}];
+                } else if (i == 3) {
+                    player.hand = vector[Card{cardId: 6, suit_string: b"spades", value_string: b"3"}, Card{cardId: 7, suit_string: b"spades", value_string: b"jack"}];
+                };
+                // Add more conditions as necessary for other players
+
+                i = i + 1;
+            };
+            
+        }; */
+
+        {
+            //perform_action(account3, game_id, FOLD, 8000000);
+            perform_action(account4, game_id, RAISE, 13000000);
+            //perform_action(account1, game_id, FOLD, 13000000);
+            perform_action(account2, game_id, RAISE, 18000000);
+            //perform_action(account3, game_id, CALL, 18000000);
+            perform_action(account4, game_id, CALL, 5000000);
+            //perform_action(account1, game_id, CALL, 18000000);
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_TURN, EINVALID_GAME);
+            assert!(vector::length(&game_metadata.community) == 4, EINVALID_GAME);
+        };
+
+        {
+            //perform_action(account3, game_id, CHECK, 0);
+            perform_action(account4, game_id, CHECK, 0);
+            /* perform_action(account1, game_id, CHECK, 0); */
+            perform_action(account2, game_id, RAISE, 10000000);
+            //perform_action(account3, game_id, CALL, 10000000);
+            perform_action(account4, game_id, CALL, 10000000);
+            /* perform_action(account1, game_id, CALL, 10000000); */
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_RIVER, EINVALID_GAME);
+            assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
+        };
+
+        {
+            //perform_action(account3, game_id, RAISE, 5000000);
+            perform_action(account4, game_id, RAISE, 10000000);
+            /* perform_action(account1, game_id, CALL, 10000000); */
+            perform_action(account2, game_id, CALL, 10000000);
+            //perform_action(account3, game_id, CALL, 10000000);
+
+            let game_metadata = get_game_metadata_by_id(game_id);
+
+            assert!(game_metadata.stage == STAGE_SHOWDOWN, EINVALID_GAME);
+            assert!(vector::length(&game_metadata.community) == 5, EINVALID_GAME);
+        };
+
+            populate_card_values(admin, game_id,
+        vector[
+            string::utf8(b"clubs"),    string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"diamonds"),
+            string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"clubs"),
+            string::utf8(b"clubs"),    string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"clubs"),
+            string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),   string::utf8(b"spades"),
+            string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"diamonds"), string::utf8(b"spades"),
+            string::utf8(b"hearts"),   string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"spades"),
+            string::utf8(b"hearts"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),   string::utf8(b"spades"),
+            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
+            string::utf8(b"clubs"),    string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"hearts"),
+            string::utf8(b"spades"),   string::utf8(b"spades"),   string::utf8(b"diamonds"), string::utf8(b"hearts"),
+            string::utf8(b"spades"),   string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"clubs"),
+            string::utf8(b"diamonds"), string::utf8(b"clubs"),    string::utf8(b"hearts"),   string::utf8(b"diamonds"),
+            string::utf8(b"diamonds"), string::utf8(b"spades"),   string::utf8(b"hearts"),   string::utf8(b"diamonds"),
+        ],
+        vector[
+            string::utf8(b"jack"),  string::utf8(b"6"),     string::utf8(b"8"),    string::utf8(b"2"),    string::utf8(b"10"),   string::utf8(b"7"),
+            string::utf8(b"3"),     string::utf8(b"4"),     string::utf8(b"5"),    string::utf8(b"10"),   string::utf8(b"8"),    string::utf8(b"king"),
+            string::utf8(b"queen"), string::utf8(b"8"),     string::utf8(b"2"),    string::utf8(b"9"),    string::utf8(b"king"), string::utf8(b"3"),
+            string::utf8(b"5"),     string::utf8(b"8"),     string::utf8(b"ace"),  string::utf8(b"king"), string::utf8(b"6"),    string::utf8(b"jack"),
+            string::utf8(b"10"),    string::utf8(b"ace"),   string::utf8(b"5"),    string::utf8(b"5"),    string::utf8(b"4"),    string::utf8(b"7"),
+            string::utf8(b"queen"), string::utf8(b"6"),     string::utf8(b"3"),    string::utf8(b"2"),    string::utf8(b"king"), string::utf8(b"4"),
+            string::utf8(b"2"),     string::utf8(b"ace"),   string::utf8(b"9"),    string::utf8(b"jack"), string::utf8(b"7"),    string::utf8(b"ace"),
+            string::utf8(b"9"),     string::utf8(b"9"),     string::utf8(b"jack"), string::utf8(b"10"),   string::utf8(b"7"),    string::utf8(b"queen"),
+            string::utf8(b"6"),     string::utf8(b"queen"), string::utf8(b"3"),    string::utf8(b"4")
+        ]
+        );
+        
+        {
+            let game_metadata = get_game_metadata_by_id(game_id);
+            debug::print(&string::utf8(b"Game metadata: "));
+            debug::print(&game_metadata);
+        };
+
+        let user1_games = borrow_global<UserGames>(signer::address_of(account1));
+        let user2_games = borrow_global<UserGames>(signer::address_of(account2));
+        let user3_games = borrow_global<UserGames>(signer::address_of(account3));
+        let user4_games = borrow_global<UserGames>(signer::address_of(account4));
+
+        // Make sure the users have the game in their list of games
+        assert!(vector::length(&user1_games.games) == 1, EINVALID_GAME);
+        assert!(vector::length(&user2_games.games) == 1, EINVALID_GAME);
+        assert!(vector::length(&user3_games.games) == 1, EINVALID_GAME);
+        assert!(vector::length(&user4_games.games) == 1, EINVALID_GAME);
+
+        coin::destroy_burn_cap(burn_cap);
+        coin::destroy_mint_cap(mint_cap);
+    }
 
     #[test_only]
     fun create_player(id: address, hand: vector<Card>): Player {

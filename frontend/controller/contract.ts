@@ -28,12 +28,12 @@ export enum GameStage {
   River = 3,
   Showdown = 4,
 }
-export enum GameStage {
+export enum GameStatus {
   OPEN = "0",
   INPROGRESS = "1",
   CLOSE = "2",
 }
-type Player = {
+export type Player = {
   current_bet: string;
   hand: DeckCard[];
   id: string;
@@ -57,7 +57,7 @@ export type GameState = {
   stage: GameStage;
   stake: string;
   starter: number;
-  state: GameStage;
+  state: GameStatus;
   turn: string;
   winner: string;
 };

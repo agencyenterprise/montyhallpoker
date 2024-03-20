@@ -6,3 +6,15 @@ export function getAptosClient() {
   });
   return new Aptos(config);
 }
+
+export const getAptosWallet = (): any => {
+  if ("aptos" in window) {
+    return window.aptos;
+  } else {
+    window.open("https://petra.app/", `_blank`);
+  }
+};
+
+export const toAptos = (value: string | number) => {
+  return Number(value) / 10 ** 8;
+};
