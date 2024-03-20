@@ -33,7 +33,7 @@ export enum GameStatus {
   INPROGRESS = "1",
   CLOSE = "2",
 }
-type Player = {
+export type Player = {
   current_bet: string;
   hand: DeckCard[];
   id: string;
@@ -66,7 +66,9 @@ export type ChainResponse = {
   vec: any[];
 };
 
-export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => {
+export const getGameById = async (
+  gameId: number
+): Promise<Maybe<GameState>> => {
   try {
     const game = await client.view({
       payload: {
@@ -80,7 +82,9 @@ export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => 
   }
 };
 
-export const getGameByRoomId = async (roomId: string): Promise<Maybe<GameState>> => {
+export const getGameByRoomId = async (
+  roomId: string
+): Promise<Maybe<GameState>> => {
   try {
     const game = (await client.view({
       payload: {

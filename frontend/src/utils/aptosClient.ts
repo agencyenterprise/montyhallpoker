@@ -14,3 +14,7 @@ export const getAptosWallet = (): any => {
     window.open("https://petra.app/", `_blank`);
   }
 };
+
+export const toAptos = (value: string | number) => {
+  return Number(value) / 10 ** 8;
+};
