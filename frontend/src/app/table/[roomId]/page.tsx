@@ -2,7 +2,7 @@
 
 import classnames from "classnames";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CONTRACT_ADDRESS, GameState, GameStage, getGameByRoomId, GameStatus } from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
@@ -13,6 +13,7 @@ import { parseAddress } from "@/utils/address";
 import { useRouter } from "next/navigation";
 import { skip } from "node:test";
 import { playSound } from "../../../utils/audio";
+import usePrevious from "../../../hooks/usePrevious";
 
 const ACTIONS = {
   FOLD: 0,
@@ -43,18 +44,26 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
   const [stop, setStop] = useState(false);
 
+  const currentGame = useRef<Maybe<GameState>>();
+
   const controller = new AbortController();
   const router = useRouter();
 
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
+    // We have to manually set the currentGame ref to the game we want to track
+    if (game && !currentGame.current) {
+      currentGame.current = game;
+    }
+    if (currentGame.current?.id !== game?.id) {
+      return;
+    }
     const wallet = getAptosWallet();
     const { address } = await wallet?.account();
     const mePlayer = game?.players.find((player) => parseAddress(player.id) === parseAddress(address))!;
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
-    await revealComunityCards(game!.id!);
     if (game?.stage == GameStage.Showdown && game.state != GameStatus.CLOSE) {
       fetch(`/api/reveal/all`, {
         method: "POST",
@@ -79,6 +88,14 @@ export default function PokerGameTable({ params }: { params: any }) {
   }, [gameState]);
 
   useEffect(() => {
+    if (gameState?.state == GameStatus.CLOSE) {
+      setStop(true);
+    }
+  }, [gameState]);
+
+  const previousGameState = usePrevious(gameState);
+
+  useEffect(() => {
     retrieveGameState();
   }, [gameState]);
 
@@ -89,12 +106,41 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
   }, [gameStarted, gameState]);
 
-  if (!connected) {
-    router.push("/");
-  }
+  useEffect(() => {
+    if (gameState?.state == GameStatus.INPROGRESS) {
+      if (gameState?.turn == me && previousGameState?.turn != me) {
+        if (document.hidden) {
+          playSound("your-turn-blurred");
+        } else {
+          playSound("your-turn");
+        }
+      } else if (gameState?.turn != me && previousGameState?.turn != me && gameState?.turn != previousGameState?.turn) {
+        // determine last action made
+        if (+gameState?.current_bet > +previousGameState?.current_bet) {
+          playSound("more-chips");
+        } else if (+gameState?.current_bet == +previousGameState?.current_bet && +gameState?.current_bet > 0) {
+          playSound("chips");
+        } else if (+gameState?.current_bet == 0) {
+          playSound("wood-knock");
+          alert("action from game");
+        }
+      }
+    }
+    if (gameState?.stage == GameStage.Flop && previousGameState?.stage != GameStage.Flop) {
+      revealComunityCards(gameState.id);
+    } else if (gameState?.stage == GameStage.Turn && previousGameState?.stage != GameStage.Turn) {
+      revealComunityCards(gameState.id);
+    } else if (gameState?.stage == GameStage.River && previousGameState?.stage != GameStage.River) {
+      revealComunityCards(gameState.id);
+    }
+  }, [gameState, me, previousGameState]);
 
-  const revealComunityCards = async (gameId: string) => {
+  const revealComunityCards = async (gameId: string, retry = 0) => {
     if (!gameId) {
+      return;
+    }
+    if (retry > 3) {
+      alert("Failed to reveal community cards, try refreshing the page");
       return;
     }
     const response = await fetch(`/api/reveal/community`, {
@@ -107,6 +153,13 @@ export default function PokerGameTable({ params }: { params: any }) {
     const data = await response.json();
     if (data.message == "OK") {
       setCommunityCards(data.communityCards);
+      playSound("shuffle");
+    } else {
+      console.error(data);
+      // Retry
+      setTimeout(() => {
+        revealComunityCards(gameId, retry + 1);
+      }, 2000);
     }
   };
 
@@ -156,6 +209,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     const data = await res.json();
     if (data.message == "OK") {
       setUserCards(data.userCards);
+      playSound("harp");
     }
   };
 
@@ -204,7 +258,7 @@ export default function PokerGameTable({ params }: { params: any }) {
             <Card valueString={`${card.suit}_${card.value}`} size="large" key={index} />
           ))}
         </div>
-        <div className="absolute -bottom-20 flex gap-x-4">
+        <div className="flex gap-x-4">
           <ActionButtons meIndex={meIndex} gameState={gameState!} />
         </div>
         <div className="absolute right-40 h-full flex justify-center gap-x-2 items-center text-white">
@@ -262,6 +316,8 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
       return;
     }
 
+    console.log(Number(+gameState?.current_bet - +gameState!.players[meIndex].current_bet));
+
     try {
       const wallet = getAptosWallet();
       const account = await wallet?.account();
@@ -274,8 +330,22 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
         },
       });
 
-      if (action === ACTIONS.RAISE || action === ACTIONS.CALL) {
-        playSound("chips");
+      switch (action) {
+        case ACTIONS.CALL:
+          playSound("chips");
+          break;
+        case ACTIONS.RAISE:
+          playSound("more-chips");
+          break;
+        case ACTIONS.CHECK:
+          playSound("wood-knock");
+          alert("action from player");
+          break;
+        case ACTIONS.FOLD:
+          playSound("fold", 0.7);
+          break;
+        default:
+          break;
       }
 
       await aptosClient.waitForTransaction({
@@ -287,18 +357,42 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
     }
   };
 
+  if (!gameState) {
+    return <div></div>;
+  }
+
+  if (gameState.state == GameStatus.OPEN) {
+    return (
+      <div className="absolute top-4 left-4">
+        <div className="text-white whitespace-pre font-bold">
+          Waiting for {4 - gameState.players.length} more players
+        </div>
+      </div>
+    );
+  }
+
+  if (meIndex !== gameState?.currentPlayerIndex && +gameState.last_action_timestamp - Date.now() / 1000 > 30) {
+    return (
+      <div className="flex w-fit absolute bottom-4 -left-20" title="You can skip an inactive player after 60s">
+        <Button className="w-full whitespace-pre" onClick={skipInactivePlayer}>
+          Skip inactive player
+        </Button>
+      </div>
+    );
+  }
+
   if (meIndex !== gameState?.currentPlayerIndex) {
     return <div></div>;
   }
 
   return (
-    <div className="flex flex-col gap-y-4">
+    <div className="flex flex-col gap-y-4 absolute bottom-4 left-4">
       <div className="flex gap-x-2 h-fit">
         <Button disabled={raiseValue <= 0} onClick={() => setRaiseValue((prev) => prev - Number(gameState?.stake))}>
           -
         </Button>
         <input
-          className="text-center bg-[#0F172A] text-white w-[100px] h-full rounded-[10px] border border-cyan-400"
+          className="text-center bg-[#0F172A] text-white w-[100px] h-auto min-h-full rounded-[10px] border border-cyan-400"
           value={toAptos(raiseValue).toFixed(2)}
         />
         <Button onClick={() => setRaiseValue((prev) => prev + Number(gameState?.stake))}>+</Button>
@@ -323,11 +417,6 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
             Check
           </Button>
         )}
-      </div>
-      <div className="flex gap-x-4 w-full" title="You can skip an inactive player after 60s">
-        <Button className="w-full" onClick={skipInactivePlayer}>
-          Skip current player
-        </Button>
       </div>
     </div>
   );
@@ -416,7 +505,7 @@ function Stack({ stack }: StackProps) {
       <PokerStackIcon />{" "}
       <span className="flex gap-x-2 text-white rounded-full bg-[#0F172A] px-2 py-[6px] text-xs">
         <StackIcon />
-        {stack.toFixed(2)}
+        {toAptos(stack).toFixed(2)}
       </span>
     </div>
   );

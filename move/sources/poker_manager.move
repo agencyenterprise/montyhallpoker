@@ -32,6 +32,7 @@ module poker::poker_manager {
     const EINVALID_CARD: u64 = 12;
     const ERAISE_TOO_LOW: u64 = 13;
     const ERAISE_TOO_HIGH: u64 = 14;
+    const EINVALID_STAGE: u64 = 15;
 
     // Game states
     const GAMESTATE_OPEN: u64 = 0;
@@ -475,6 +476,7 @@ module poker::poker_manager {
 
         let gamestate = borrow_global_mut<GameState>(@poker);
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
+        assert!(gamestate.stage == STAGE_SHOWDOWN, EINVALID_STAGE);
 
         let game_metadata = simple_map::borrow_mut(&mut gamestate.games, &game_id);
 
@@ -662,7 +664,6 @@ module poker::poker_manager {
             assert!(game_metadata.current_bet == 0, EINVALID_MOVE);
             player.checked = true;
         } else if (action == CALL) {
-            assert!(amount > 0, EINVALID_MOVE);
             // assert that attempted bet + player's current bet is equal to current bet
             assert!(amount == game_metadata.current_bet - player.current_bet, EINVALID_MOVE);
             let diff = game_metadata.current_bet - player.current_bet;
@@ -708,9 +709,11 @@ module poker::poker_manager {
         };
 
         if (activePlayers == 1) {
-            game_metadata.winners = vector[vector::borrow(&game_metadata.players, (lastActivePlayerIndex as u64)).id];
+            game_metadata.stage = STAGE_SHOWDOWN;
+            return
         } else if (activePlayers == 0) {
             game_metadata.state = GAMESTATE_CLOSED;
+            return
         };
 
         // Skip folded players

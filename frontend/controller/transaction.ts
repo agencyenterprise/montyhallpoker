@@ -46,7 +46,7 @@ export const revealGameCards = async (gameId: number | string) => {
     sender: account.accountAddress,
     data: {
       function: `${CONTRACT_ADDRESS}::poker_manager::populate_card_values`,
-      functionArguments: [`1`, orderedSuits, orderedValues],
+      functionArguments: [`${gameId}`, orderedSuits, orderedValues],
     },
   });
   const txHash = await aptos.signAndSubmitTransaction({ signer: account, transaction: transaction });

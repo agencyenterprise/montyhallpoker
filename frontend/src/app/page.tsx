@@ -49,6 +49,7 @@ export default function Home() {
 function GameRoomLobby() {
   const router = useRouter();
   const [allRoomsData, setAllRoomsData] = useState<GameRoom[]>([]);
+  const [myRoom, setMyRoom] = useState<GameRoom | null>(null);
 
   useEffect(() => {
     fetchLobbyData().catch(console.error);
@@ -64,6 +65,7 @@ function GameRoomLobby() {
         disabled: room.players.length >= MAX_PLAYER_COUNT && !room.hasMe,
       };
     });
+    setMyRoom(processedLobbyData.find((room) => room.hasMe) || null);
     setAllRoomsData(processedLobbyData);
   };
 
@@ -86,10 +88,26 @@ function GameRoomLobby() {
   };
 
   return (
-    <div className="grid grid-cols-4 gap-6 mt-8">
-      {allRoomsData.map((room) => {
-        return <GameRoomBadge key={room.id} room={room} />;
-      })}
+    <div>
+      {myRoom && (
+        <h1 className="text-white w-full text-center text-xl">
+          You are currently playing in room{" "}
+          <span
+            onClick={() => {
+              router.push(`/table/${myRoom.id}`);
+              playSound("door");
+            }}
+            className="font-bold cursor-pointer underline"
+          >
+            {myRoom.name}
+          </span>
+        </h1>
+      )}
+      <div className="grid grid-cols-4 gap-6 mt-8">
+        {allRoomsData.map((room) => {
+          return <GameRoomBadge key={room.id} room={room} />;
+        })}
+      </div>
     </div>
   );
 }
@@ -110,11 +128,11 @@ function GameRoomBadge({ room }: GameRoomBadgeProps) {
   switch (room.ante) {
     case HIGH_STAKES:
       bgColor = "bg-gradient-to-r from-rose-400/25 to-rose-400/0";
-      style = "bg-game bg-[left_8rem_center] bg-scale border-rose-400 border bg-no-repeat bg-scale";
+      style = "bg-game bg-[left_8rem_center] border-rose-400 border bg-no-repeat bg-scale";
       break;
     case MEDIUM_STAKES:
       bgColor = "bg-gradient-to-r from-amber-400/25 to-amber-400/0";
-      style = "bg-game bg-[left_8rem_center] bg-scale border-amber-400 border bg-no-repeat bg-scale";
+      style = "bg-game bg-[left_8rem_center] border-amber-400 border bg-no-repeat bg-scale";
       break;
     case LOW_STAKES:
       bgColor = "bg-gradient-to-r from-lime-400/25 to-lime-400/0";

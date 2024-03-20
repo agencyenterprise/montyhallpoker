@@ -5,10 +5,10 @@ set -e
 echo "##### Running module function #####"
 
 aptos move run \
-  --function-id '0xe4ab044df91caf41e1b13ea1a2d57a72f5d9a3b8edb52755046e3f5d3d3082d7::poker_manager::perform_action' \
+  --function-id '0x9f535b0ec315f49bc4e3aea04e79b28fb5077726aeb9eb09276d3ef0ad1e0953::poker_manager::skip_inactive_player' \
   --profile testlolo52 \
   --assume-yes \
-  --args u64:1 u64:1 u64:5000012
+  --args u64:13
 
 aptos move run \
   --function-id '0x7436bbe16422c873f3d81bf1668b96ef50f2c6624a851c1a991c92de1b253b29::poker_manager::perform_action' \
