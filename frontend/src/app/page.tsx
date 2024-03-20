@@ -10,7 +10,15 @@ import { Player, getGameByRoomId } from "../../controller/contract";
 import Button from "@/components/Button";
 import { parseAddress } from "@/utils/address";
 import { PlayersIcon, BuyinIcon, MoneyIcon } from "@/components/Icons";
-import { Room, GameRoom, MAX_PLAYER_COUNT, LOW_STAKES, MEDIUM_STAKES, HIGH_STAKES, AVAILABLE_ROOMS } from "@/constants";
+import {
+  Room,
+  GameRoom,
+  MAX_PLAYER_COUNT,
+  LOW_STAKES,
+  MEDIUM_STAKES,
+  HIGH_STAKES,
+  AVAILABLE_ROOMS,
+} from "@/constants";
 import { playSound } from "../utils/audio";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS!;
@@ -56,10 +64,18 @@ function GameRoomLobby() {
   }, []);
 
   const fetchLobbyData = async () => {
-    const lobbyData = await Promise.all(AVAILABLE_ROOMS.map((room) => pullRoomData(room)));
+    const lobbyData = await Promise.all(
+      AVAILABLE_ROOMS.map((room) => pullRoomData(room))
+    );
     const isMeInAnyGame = !!lobbyData.find((room) => room.hasMe);
     const processedLobbyData = lobbyData.map((room) => {
-      console.log(!room.hasMe && isMeInAnyGame, room.hasMe, isMeInAnyGame, room.players.length, MAX_PLAYER_COUNT);
+      console.log(
+        !room.hasMe && isMeInAnyGame,
+        room.hasMe,
+        isMeInAnyGame,
+        room.players.length,
+        MAX_PLAYER_COUNT
+      );
       return {
         ...room,
         disabled: room.players.length >= MAX_PLAYER_COUNT && !room.hasMe,
@@ -78,7 +94,9 @@ function GameRoomLobby() {
       id: room.id,
       name: room.name,
       gameId: game?.id || "",
-      hasMe: !!game?.players.find((player) => parseAddress(player.id) === parseAddress(account.address)),
+      hasMe: !!game?.players.find(
+        (player) => parseAddress(player.id) === parseAddress(account.address)
+      ),
       disabled: false,
       ante: Number(game?.stake || 0),
       players: game?.players || [],
@@ -113,7 +131,9 @@ function GameRoomLobby() {
 }
 
 function Banner() {
-  return <Image src="/banner.png" width={1280} height={308} alt="Cassino banner" />;
+  return (
+    <Image src="/banner.png" width={1280} height={308} alt="Cassino banner" />
+  );
 }
 
 interface GameRoomBadgeProps extends React.HTMLAttributes<HTMLButtonElement> {
@@ -128,22 +148,27 @@ function GameRoomBadge({ room }: GameRoomBadgeProps) {
   switch (room.ante) {
     case HIGH_STAKES:
       bgColor = "bg-gradient-to-r from-rose-400/25 to-rose-400/0";
-      style = "bg-game bg-[left_8rem_center] border-rose-400 border bg-no-repeat bg-scale";
+      style =
+        "bg-game bg-[left_8rem_center] border-rose-400 border bg-no-repeat bg-scale";
       break;
     case MEDIUM_STAKES:
       bgColor = "bg-gradient-to-r from-amber-400/25 to-amber-400/0";
-      style = "bg-game bg-[left_8rem_center] border-amber-400 border bg-no-repeat bg-scale";
+      style =
+        "bg-game bg-[left_8rem_center] border-amber-400 border bg-no-repeat bg-scale";
       break;
     case LOW_STAKES:
       bgColor = "bg-gradient-to-r from-lime-400/25 to-lime-400/0";
-      style = "bg-game border-lime-400 border bg-no-repeat bg-[left_8rem_center] bg-scale";
+      style =
+        "bg-game border-lime-400 border bg-no-repeat bg-[left_8rem_center] bg-scale";
       break;
   }
 
   const joinGame = async () => {
     const wallet = getAptosWallet();
     const account = await wallet?.account();
-    const meInRoom = room.players.find((player) => parseAddress(player.id) === parseAddress(account.address));
+    const meInRoom = room.players.find(
+      (player) => parseAddress(player.id) === parseAddress(account.address)
+    );
 
     if (meInRoom) {
       router.push(`/table/${room.id}`);
@@ -160,7 +185,6 @@ function GameRoomBadge({ room }: GameRoomBadgeProps) {
 
       const response = await signAndSubmitTransaction({
         sender: account.address,
-
         data: {
           function: `${CONTRACT_ADDRESS}::poker_manager::join_game`,
           typeArguments: [],
