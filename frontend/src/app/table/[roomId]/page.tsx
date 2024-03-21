@@ -495,7 +495,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
         </Button>
         <input
           className="text-center bg-[#0F172A] text-white w-[100px] h-auto min-h-full rounded-[10px] border border-cyan-400"
-          defaultValue={toAptos(raiseValue).toFixed(2)}
+          value={toAptos(raiseValue).toFixed(2)}
         />
         <Button
           onClick={() =>
@@ -811,6 +811,7 @@ function GameEndModal({
   const { signAndSubmitTransaction } = useWallet();
   const newStateRef = useRef<Maybe<GameState>>();
   const winnerRef = useRef<any[]>();
+  const [winners, setWinners] = useState<any[]>();
 
   const finishedGame = gameState && gameState?.stage === GameStage.Showdown;
 
@@ -831,6 +832,7 @@ function GameEndModal({
     winnerRef.current = newStateRef.current.players.filter((player: any) =>
       winnerAdd.includes(parseAddress(player.id))
     );
+    setWinners(winnerRef?.current!);
   };
 
   const joinGame = async () => {
@@ -838,23 +840,6 @@ function GameEndModal({
       return;
     }
     const game = await getGameByRoomId(newStateRef.current.room_id);
-    const wallet = getAptosWallet();
-    const account = await wallet?.account();
-    const meInRoom = newStateRef.current.players.find(
-      (player) => parseAddress(player.id) === parseAddress(account.address)
-    );
-
-    if (meInRoom) {
-      router.push(`/table/${newStateRef?.current?.room_id}`);
-      playSound("door");
-      return;
-    }
-    if (
-      newStateRef?.current?.players?.length >= MAX_PLAYER_COUNT &&
-      !meInRoom
-    ) {
-      return;
-    }
 
     try {
       const wallet = getAptosWallet();
@@ -891,7 +876,7 @@ function GameEndModal({
             <div className="w-full h-full flex flex-col items-center gap-y-40 ">
               <>
                 <h1>Congratulations to the winner!</h1>
-                {winnerRef.current?.map((winner: any) => (
+                {winners?.map((winner: any) => (
                   <div className="flex flex-col items-end ">
                     <PlayerBanner
                       relative={true}
