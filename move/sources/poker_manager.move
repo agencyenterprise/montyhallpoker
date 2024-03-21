@@ -790,6 +790,9 @@ module poker::poker_manager {
 
         let time_diff = timestamp::now_seconds() - game_metadata.last_action_timestamp;
         assert!(time_diff > 30, EINVALID_MOVE);
+
+        let currentPlayer = vector::borrow_mut(&mut game_metadata.players, (game_metadata.currentPlayerIndex as u64));
+        currentPlayer.status = STATUS_FOLDED;
         
         let nextPlayer = vector::borrow(&game_metadata.players, ((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players));
         game_metadata.turn = nextPlayer.id;

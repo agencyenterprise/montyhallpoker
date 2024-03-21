@@ -11,10 +11,10 @@ aptos move run \
   --args u64:13
 
 aptos move run \
-  --function-id '0x7436bbe16422c873f3d81bf1668b96ef50f2c6624a851c1a991c92de1b253b29::poker_manager::perform_action' \
-  --profile testlolo51 \
+  --function-id '0x598d48199c7214e2e080cce37ceac7d6a34c8bad56631a921717ee7a2e17f5f6::poker_manager::perform_action' \
+  --profile dusty \
   --assume-yes \
-  --args u64:1 u64:1 u64:5000012
+  --args u64:17 u64:2 u64:90000000
 
 aptos move run \
   --function-id '0x7436bbe16422c873f3d81bf1668b96ef50f2c6624a851c1a991c92de1b253b29::poker_manager::perform_action' \
