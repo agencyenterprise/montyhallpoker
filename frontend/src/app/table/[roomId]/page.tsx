@@ -55,6 +55,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [gameStarted, setGameStarted] = useState(false);
   const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
+  const [gameId, setGameId] = useState<string>();
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
   const [stop, setStop] = useState(false);
   const winnerRef = useRef<string>("");
@@ -69,7 +70,17 @@ export default function PokerGameTable({ params }: { params: any }) {
   const router = useRouter();
 
   const gameWorker = async () => {
-    const game = await getGameByRoomId(roomId);
+    let game;
+
+    if (!gameId) {
+      game = await getGameByRoomId(roomId);
+      setGameId(game?.id);
+    } else {
+      game = await getGameById(Number(gameId));
+    }
+    if (!game) {
+      return;
+    }
     if (winnerRef.current !== "") {
       setStop(true);
       return;
@@ -77,9 +88,6 @@ export default function PokerGameTable({ params }: { params: any }) {
     // We have to manually set the currentGame ref to the game we want to track
     if (game && !currentGame.current) {
       currentGame.current = game;
-    }
-    if (currentGame.current?.id !== game?.id) {
-      return;
     }
     const wallet = getAptosWallet();
     const { address } = await wallet?.account();
@@ -830,6 +838,7 @@ function GameEndModal({
   console.log(finishedGame, gameState);
   useEffect(() => {
     if (finishedGame) {
+      console.log("carreguei game");
       updateGame().catch(console.error);
     }
   }, []);
@@ -843,6 +852,7 @@ function GameEndModal({
     const gameStorage = JSON.parse(window.localStorage.getItem("game") ?? "{}");
     console.log("gamestorage", gameStorage);
     const newGame = await getGameById(Number(gameStorage?.id)!);
+    console.log("new game", newGame);
     newStateRef.current = newGame as GameState;
     const winnerAdd = newStateRef.current.winners.map((pa) => parseAddress(pa));
     winnerRef.current = newStateRef.current.players.filter((player: any) =>
@@ -852,10 +862,11 @@ function GameEndModal({
   };
 
   const joinGame = async () => {
-    if (!newStateRef?.current) {
+    const gameStorage = JSON.parse(window.localStorage.getItem("game") ?? "{}");
+    if (!gameStorage?.id) {
       return;
     }
-    const game = await getGameByRoomId(newStateRef.current.room_id);
+    const game = await getGameByRoomId(gameStorage.room_id);
 
     try {
       const wallet = getAptosWallet();
@@ -866,15 +877,15 @@ function GameEndModal({
         data: {
           function: `${CONTRACT_ADDRESS}::poker_manager::join_game`,
           typeArguments: [],
-          functionArguments: [`${game?.id!}`, `${newStateRef?.current?.stake}`],
+          functionArguments: [`${game?.id!}`, `${gameStorage?.stake}`],
         },
       });
       await aptosClient.waitForTransaction({
         transactionHash: response.hash,
       });
       playSound("door");
-      router.push(`/table/${newStateRef?.current?.room_id}`);
       window.location.reload();
+      router.push(`/table/${newStateRef?.current?.room_id}`);
     } catch (error: any) {
       console.error(error);
     }
