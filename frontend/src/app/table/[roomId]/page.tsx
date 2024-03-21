@@ -1,5 +1,6 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import classnames from "classnames";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -9,6 +10,7 @@ import {
   GameStage,
   getGameByRoomId,
   GameStatus,
+  PlayerStatus,
 } from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
@@ -53,6 +55,10 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [gameState, setGameState] = useState<Maybe<GameState>>();
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
   const [stop, setStop] = useState(false);
+  const winnerRef = useRef<string>("");
+  const showGameEndModalRef = useRef<boolean>(
+    gameState?.stage == GameStage.Showdown
+  );
 
   const currentGame = useRef<Maybe<GameState>>();
 
@@ -76,6 +82,8 @@ export default function PokerGameTable({ params }: { params: any }) {
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
+    showGameEndModalRef.current = gameState?.stage == GameStage.Showdown;
+
     if (game?.stage == GameStage.Showdown && game.state != GameStatus.CLOSE) {
       const response = await fetch(`/api/reveal/all`, {
         method: "POST",
@@ -90,6 +98,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         playSound("winner");
       }
     } else if (game?.state == GameStatus.CLOSE) {
+      winnerRef.current = game?.winners?.join(", ");
       alert("Game Ended! Winner is " + game?.winners?.join(", "));
     }
   };
@@ -280,68 +289,71 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
   };
 
-  if (gameState?.stage == GameStage.Showdown) {
-    return <div>Game Ended</div>;
-  }
-
   return (
-    <div className="h-full w-full flex items-center justify-center relative">
-      <div className="relative">
-        <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
-          <PlayerBanner
-            isMe={false}
-            gameState={gameState!}
-            currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={(meIndex + 1) % 4}
-            stack={1000}
-            position={2}
-          />
-          <PlayerBanner
-            isMe={false}
-            gameState={gameState!}
-            currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={(meIndex + 2) % 4}
-            stack={1000}
-            position={1}
-          />
-        </div>
-        <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
-          <PlayerBanner
-            isMe={true}
-            gameState={gameState!}
-            currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={meIndex % 4}
-            stack={1000}
-            position={0}
-            cards={userCards}
-          />
-          <PlayerBanner
-            isMe={false}
-            gameState={gameState!}
-            currentIndex={gameState?.currentPlayerIndex || 0}
-            playerIndex={(meIndex + 3) % 4}
-            stack={1000}
-            position={3}
-          />
-        </div>
-        <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
-          {communityCards.map((card, index) => (
-            <Card
-              valueString={`${card.suit}_${card.value}`}
-              size="large"
-              key={index}
+    <>
+      <GameEndModal
+        show={showGameEndModalRef.current}
+        winner={winnerRef.current}
+        gameState={gameState!}
+      />
+      <div className="h-full w-full flex items-center justify-center relative">
+        <div className="relative">
+          <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
+            <PlayerBanner
+              isMe={false}
+              gameState={gameState!}
+              currentIndex={gameState?.currentPlayerIndex || 0}
+              playerIndex={(meIndex + 1) % 4}
+              stack={1000}
+              position={2}
             />
-          ))}
+            <PlayerBanner
+              isMe={false}
+              gameState={gameState!}
+              currentIndex={gameState?.currentPlayerIndex || 0}
+              playerIndex={(meIndex + 2) % 4}
+              stack={1000}
+              position={1}
+            />
+          </div>
+          <div className="absolute max-w-[582px] flex justify-between items-end h-full w-full top-0 left-[290px] bottom-0">
+            <PlayerBanner
+              isMe={true}
+              gameState={gameState!}
+              currentIndex={gameState?.currentPlayerIndex || 0}
+              playerIndex={meIndex % 4}
+              stack={1000}
+              position={0}
+              cards={userCards}
+            />
+            <PlayerBanner
+              isMe={false}
+              gameState={gameState!}
+              currentIndex={gameState?.currentPlayerIndex || 0}
+              playerIndex={(meIndex + 3) % 4}
+              stack={1000}
+              position={3}
+            />
+          </div>
+          <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
+            {communityCards.map((card, index) => (
+              <Card
+                valueString={`${card.suit}_${card.value}`}
+                size="large"
+                key={index}
+              />
+            ))}
+          </div>
+          <div className="flex gap-x-4">
+            <ActionButtons meIndex={meIndex} gameState={gameState!} />
+          </div>
+          <div className="absolute right-40 h-full flex justify-center gap-x-2 items-center text-white">
+            <Stack stack={currentPot} />
+          </div>
+          <PokerTable />
         </div>
-        <div className="flex gap-x-4">
-          <ActionButtons meIndex={meIndex} gameState={gameState!} />
-        </div>
-        <div className="absolute right-40 h-full flex justify-center gap-x-2 items-center text-white">
-          <Stack stack={currentPot} />
-        </div>
-        <PokerTable />
       </div>
-    </div>
+    </>
   );
 }
 
@@ -571,6 +583,7 @@ function PlayerBanner({
   const playerBet = Number(gameState.players[playerIndex].current_bet);
   const playerStack = gameState.players[playerIndex];
   const playerCards = gameState.players[playerIndex].hand;
+  const playerStatus = gameState.players[playerIndex].status;
 
   return (
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
@@ -579,7 +592,9 @@ function PlayerBanner({
       <div className={classnames("absolute -top-[120px] ")}>
         <Stack stack={playerBet} />
       </div>
-      {playerCards.length == 2 && <Cards cards={cards} />}
+      {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && (
+        <Cards cards={cards} />
+      )}
       <div
         className={classnames(
           "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
@@ -723,4 +738,73 @@ function Card({
       />
     </div>
   );
+}
+
+function GameEndModal({
+  show,
+  gameState,
+  winner,
+}: {
+  show: boolean;
+  gameState: GameState;
+  winner: string;
+}) {
+  if (!gameState && !show) {
+    return;
+  }
+  const winnerPlayers = gameState.players.filter((player: any) =>
+    gameState.winners
+      .map((pa) => parseAddress(pa))
+      .includes(parseAddress(player.address))
+  );
+
+  return (
+    <Dialog.Root open={show}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-dialogOverlay backdrop-blur-sm" />
+        <Dialog.Content className="z-50 fixed top-1/2 left-1/2 transform bg-white -translate-x-1/2 -translate-y-1/2 shadow-md w-[50vw] h-[30vh] min-w-[600px] min-h-[200px] p-6">
+          <div className="nes-container is-dark with-title w-[100%] h-[100%]">
+            <Dialog.Title className="text-2xl font-bold text-center">
+              End Game
+            </Dialog.Title>
+            <br />
+            <Dialog.Description>
+              <div className="w-full h-full flex flex-col items-center justify-center">
+                <>
+                  <h1>Congratulations to the winner!</h1>
+                  <p>{winner}</p>
+                  {winnerPlayers.map((winner) => {
+                    <PlayerBanner
+                      isMe={true}
+                      gameState={gameState!}
+                      currentIndex={gameState?.currentPlayerIndex || 0}
+                      playerIndex={gameState.players
+                        .map((p) => parseAddress(p.id))
+                        .indexOf(parseAddress(winner.id))}
+                      stack={1000}
+                      position={0}
+                      cards={
+                        winner.hand.map((card) => ({
+                          suit: `${parseHexTostring(card?.suit_string!)}`,
+                          value: `${parseHexTostring(card?.value_string!)}`,
+                        })) as PlayerCards[]
+                      }
+                    />;
+                  })}
+                </>
+              </div>
+            </Dialog.Description>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function parseHexTostring(hexString: string) {
+  let str = "";
+  for (let i = 0; i < hexString.length; i += 2) {
+    str += String.fromCharCode(parseInt(hexString.substr(i, 2), 16));
+  }
+  return str;
 }

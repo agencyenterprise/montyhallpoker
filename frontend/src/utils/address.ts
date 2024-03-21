@@ -10,11 +10,13 @@ export function padAddressIfNeeded(address: string) {
 }
 
 export const parseAddress = (userAddress: string) => {
+  if (!userAddress) {
+    return "";
+  }
   if (userAddress.startsWith("0x0")) {
     userAddress = userAddress.replace("0x0", "");
   } else if (userAddress.startsWith("0x")) {
     userAddress = userAddress.replace("0x", "");
-
   }
   return userAddress;
-}
+};

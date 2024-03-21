@@ -9,8 +9,6 @@ type LastRaiser = {
 };
 export type DeckCard = {
   cardId: number;
-  suit?: number;
-  value?: number;
   suit_string?: string;
   value_string?: string;
 };
@@ -66,7 +64,9 @@ export type ChainResponse = {
   vec: any[];
 };
 
-export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => {
+export const getGameById = async (
+  gameId: number
+): Promise<Maybe<GameState>> => {
   try {
     const game = await client.view({
       payload: {
@@ -80,7 +80,9 @@ export const getGameById = async (gameId: number): Promise<Maybe<GameState>> => 
   }
 };
 
-export const getGameByRoomId = async (roomId: string): Promise<Maybe<GameState>> => {
+export const getGameByRoomId = async (
+  roomId: string
+): Promise<Maybe<GameState>> => {
   try {
     const game = (await client.view({
       payload: {
