@@ -109,6 +109,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         },
       });
       const data = await response.json();
+      router.push("/");
       if (data.message == "OK") {
         playSound("winner");
       }
@@ -118,6 +119,7 @@ export default function PokerGameTable({ params }: { params: any }) {
       setShowGameEndModal(true);
       setStop(true);
       playSound("winner");
+      router.push("/");
       winnerRef.current = game?.winners?.join(", ");
     }
   };
