@@ -1,12 +1,12 @@
 "use client";
 
 import { getAptosClient, getAptosWallet, toAptos } from "@/utils/aptosClient";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import classnames from "classnames";
 import Image from "next/image";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { useRouter } from "next/navigation";
-import { Player, getGameByRoomId } from "../../controller/contract";
+import { getGameByRoomId } from "../../controller/contract";
 import Button from "@/components/Button";
 import { parseAddress } from "@/utils/address";
 import { PlayersIcon, BuyinIcon, MoneyIcon } from "@/components/Icons";
@@ -67,20 +67,10 @@ function GameRoomLobby() {
     const lobbyData = await Promise.all(
       AVAILABLE_ROOMS.map((room) => pullRoomData(room))
     );
-    const isMeInAnyGame = !!lobbyData.find((room) => room.hasMe);
-    const processedLobbyData = lobbyData.map((room) => {
-      console.log(
-        !room.hasMe && isMeInAnyGame,
-        room.hasMe,
-        isMeInAnyGame,
-        room.players.length,
-        MAX_PLAYER_COUNT
-      );
-      return {
-        ...room,
-        disabled: room.players.length >= MAX_PLAYER_COUNT && !room.hasMe,
-      };
-    });
+    const processedLobbyData = lobbyData.map((room) => ({
+      ...room,
+      disabled: room.players.length >= MAX_PLAYER_COUNT && !room.hasMe,
+    }));
     setMyRoom(processedLobbyData.find((room) => room.hasMe) || null);
     setAllRoomsData(processedLobbyData);
   };

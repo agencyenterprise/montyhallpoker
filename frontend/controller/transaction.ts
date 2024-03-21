@@ -40,8 +40,10 @@ export const revealGameCards = async (gameId: number | string) => {
     .map((_, i) => mapping[i]);
   const orderedSuits = orderedMapping.map((card) => card.suit);
   const orderedValues = orderedMapping.map((card) => card.value);
-  const account = await Account.fromPrivateKeyAndAddress({ privateKey, address });
-  console.log(orderedSuits.length, orderedValues.length);
+  const account = await Account.fromPrivateKeyAndAddress({
+    privateKey,
+    address,
+  });
   const transaction = await aptos.transaction.build.simple({
     sender: account.accountAddress,
     data: {
@@ -49,6 +51,9 @@ export const revealGameCards = async (gameId: number | string) => {
       functionArguments: [`${gameId}`, orderedSuits, orderedValues],
     },
   });
-  const txHash = await aptos.signAndSubmitTransaction({ signer: account, transaction: transaction });
+  const txHash = await aptos.signAndSubmitTransaction({
+    signer: account,
+    transaction: transaction,
+  });
   await aptos.waitForTransaction({ transactionHash: txHash.hash });
 };
