@@ -135,8 +135,8 @@ export const revealPlayerCard = async (
   const currentPlayerAddress = getAddressFromPublicKey(userPubKey);
   const currentPlayer = game.players.find((v) => parseAddress(v.id) == parseAddress(currentPlayerAddress));
   const playerCards = currentPlayer!.hand.map((v) => ({
-    value: v.cardId ? v.cardId : v.value,
-    suit: v.cardId ? v.cardId : v.suit,
+    value: v.cardId,
+    suit: v.cardId,
   }));
   if (currentPlayer!.status != PlayerStatus.Active) {
     throw new Error("Player is not active in this game");
