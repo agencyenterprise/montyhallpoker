@@ -23,7 +23,7 @@ import { useRouter } from "next/navigation";
 import { skip } from "node:test";
 import { playSound } from "../../../utils/audio";
 import usePrevious from "../../../hooks/usePrevious";
-import { MAX_PLAYER_COUNT } from "@/constants";
+import { AVAILABLE_ROOMS, MAX_PLAYER_COUNT } from "@/constants";
 
 const ACTIONS = {
   FOLD: 0,
@@ -271,6 +271,13 @@ export default function PokerGameTable({ params }: { params: any }) {
     <>
       <GameEndModal show={showGameEndModal} gameState={gameState!} />
       <div className="h-full w-full flex items-center justify-center relative">
+        {gameState?.state === GameStatus.INPROGRESS && (
+          <div className="absolute top-4 left-4">
+            <div className="text-white whitespace-pre font-bold text-2xl">
+              {AVAILABLE_ROOMS.find((room) => room.id === gameState?.room_id)?.name}
+            </div>
+          </div>
+        )}
         <div className="relative">
           <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
             <PlayerBanner
@@ -423,6 +430,9 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
       <div className="absolute top-4 left-4">
         <div className="text-white whitespace-pre font-bold">
           Waiting for {4 - gameState.players.length} more players
+        </div>
+        <div className="text-white whitespace-pre font-bold">
+          {AVAILABLE_ROOMS.find((room) => room.id === gameState?.room_id)?.name}
         </div>
       </div>
     );
