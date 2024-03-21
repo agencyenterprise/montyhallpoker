@@ -836,9 +836,12 @@ function GameEndModal({
   if (!finishedGame) {
     return <></>;
   }
+  console.log("fnishei");
 
   const updateGame = async () => {
-    const newGame = await getGameById(Number(gameState?.id)!);
+    const gameStorage = JSON.parse(window.localStorage.getItem("game") ?? "{}");
+    console.log("gamestorage", gameStorage);
+    const newGame = await getGameById(Number(gameStorage?.id)!);
     newStateRef.current = newGame as GameState;
     const winnerAdd = newStateRef.current.winners.map((pa) => parseAddress(pa));
     winnerRef.current = newStateRef.current.players.filter((player: any) =>
