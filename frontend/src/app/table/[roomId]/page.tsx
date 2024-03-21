@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { skip } from "node:test";
 import { playSound } from "../../../utils/audio";
 import usePrevious from "../../../hooks/usePrevious";
+import { MAX_PLAYER_COUNT } from "@/constants";
 
 const ACTIONS = {
   FOLD: 0,
@@ -749,6 +750,8 @@ function GameEndModal({
   gameState: GameState;
   winner: string;
 }) {
+  const router = useRouter();
+  const { signAndSubmitTransaction } = useWallet();
   if (!gameState && !show) {
     return;
   }
@@ -757,6 +760,44 @@ function GameEndModal({
       .map((pa) => parseAddress(pa))
       .includes(parseAddress(player.address))
   );
+
+  const joinGame = async () => {
+    const wallet = getAptosWallet();
+    const account = await wallet?.account();
+    const meInRoom = gameState.players.find(
+      (player) => parseAddress(player.id) === parseAddress(account.address)
+    );
+
+    if (meInRoom) {
+      router.push(`/table/${gameState.room_id}`);
+      playSound("door");
+      return;
+    }
+    if (gameState.players.length >= MAX_PLAYER_COUNT && !meInRoom) {
+      return;
+    }
+
+    try {
+      const wallet = getAptosWallet();
+      const account = await wallet?.account();
+
+      const response = await signAndSubmitTransaction({
+        sender: account.address,
+        data: {
+          function: `${CONTRACT_ADDRESS}::poker_manager::join_game`,
+          typeArguments: [],
+          functionArguments: [`${gameState.id}`, `${gameState.stake}`],
+        },
+      });
+      await aptosClient.waitForTransaction({
+        transactionHash: response.hash,
+      });
+      playSound("door");
+      router.push(`/table/${gameState.room_id}`);
+    } catch (error: any) {
+      console.error(error);
+    }
+  };
 
   return (
     <Dialog.Root open={show}>
@@ -791,6 +832,7 @@ function GameEndModal({
                       }
                     />;
                   })}
+                  <Button onClick={joinGame}>Join Next Game</Button>
                 </>
               </div>
             </Dialog.Description>
