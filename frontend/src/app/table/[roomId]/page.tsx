@@ -495,7 +495,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
         </Button>
         <input
           className="text-center bg-[#0F172A] text-white w-[100px] h-auto min-h-full rounded-[10px] border border-cyan-400"
-          value={toAptos(raiseValue).toFixed(2)}
+          defaultValue={toAptos(raiseValue).toFixed(2)}
         />
         <Button
           onClick={() =>
@@ -809,30 +809,50 @@ function GameEndModal({
   console.log("oie", gameState, show);
   const router = useRouter();
   const { signAndSubmitTransaction } = useWallet();
+  const newStateRef = useRef<Maybe<GameState>>();
+  const winnerRef = useRef<any[]>();
+
   const finishedGame = gameState && gameState?.stage === GameStage.Showdown;
+
+  useEffect(() => {
+    if (finishedGame) {
+      updateGame().catch(console.error);
+    }
+  }, []);
+
   if (!finishedGame) {
     return <></>;
   }
-  const winnerAdd = gameState.winners.map((pa) => parseAddress(pa));
-  console.log(winnerAdd);
-  const winnerPlayers = gameState.players.filter((player: any) =>
-    winnerAdd.includes(parseAddress(player.id))
-  );
+
+  const updateGame = async () => {
+    const newGame = await getGameById(Number(gameState?.id)!);
+    newStateRef.current = newGame as GameState;
+    const winnerAdd = newStateRef.current.winners.map((pa) => parseAddress(pa));
+    winnerRef.current = newStateRef.current.players.filter((player: any) =>
+      winnerAdd.includes(parseAddress(player.id))
+    );
+  };
 
   const joinGame = async () => {
-    const game = await getGameByRoomId(gameState.room_id);
+    if (!newStateRef?.current) {
+      return;
+    }
+    const game = await getGameByRoomId(newStateRef.current.room_id);
     const wallet = getAptosWallet();
     const account = await wallet?.account();
-    const meInRoom = gameState.players.find(
+    const meInRoom = newStateRef.current.players.find(
       (player) => parseAddress(player.id) === parseAddress(account.address)
     );
 
     if (meInRoom) {
-      router.push(`/table/${gameState.room_id}`);
+      router.push(`/table/${newStateRef?.current?.room_id}`);
       playSound("door");
       return;
     }
-    if (gameState.players.length >= MAX_PLAYER_COUNT && !meInRoom) {
+    if (
+      newStateRef?.current?.players?.length >= MAX_PLAYER_COUNT &&
+      !meInRoom
+    ) {
       return;
     }
 
@@ -845,14 +865,14 @@ function GameEndModal({
         data: {
           function: `${CONTRACT_ADDRESS}::poker_manager::join_game`,
           typeArguments: [],
-          functionArguments: [`${game?.id!}`, `${gameState.stake}`],
+          functionArguments: [`${game?.id!}`, `${newStateRef?.current?.stake}`],
         },
       });
       await aptosClient.waitForTransaction({
         transactionHash: response.hash,
       });
       playSound("door");
-      router.push(`/table/${gameState.room_id}`);
+      router.push(`/table/${newStateRef?.current?.room_id}`);
     } catch (error: any) {
       console.error(error);
     }
@@ -871,20 +891,24 @@ function GameEndModal({
             <div className="w-full h-full flex flex-col items-center gap-y-40 ">
               <>
                 <h1>Congratulations to the winner!</h1>
-                {winnerPlayers.map((winner) => (
+                {winnerRef.current?.map((winner: any) => (
                   <div className="flex flex-col items-end ">
                     <PlayerBanner
                       relative={true}
                       isMe={true}
-                      gameState={gameState!}
-                      currentIndex={gameState?.currentPlayerIndex || 0}
-                      playerIndex={gameState.players
-                        .map((p) => parseAddress(p.id))
-                        .indexOf(parseAddress(winner.id))}
+                      gameState={newStateRef.current!}
+                      currentIndex={
+                        newStateRef.current?.currentPlayerIndex || 0
+                      }
+                      playerIndex={
+                        newStateRef?.current?.players
+                          .map((p) => parseAddress(p.id))
+                          .indexOf(parseAddress(winner.id))!
+                      }
                       stack={1000}
                       position={0}
                       cards={
-                        winner.hand.map((card) => {
+                        winner.hand.map((card: any) => {
                           console.log({
                             suit: `${parseHexTostring(card?.suit_string!)}`,
                             value: `${parseHexTostring(card?.value_string!)}`,
