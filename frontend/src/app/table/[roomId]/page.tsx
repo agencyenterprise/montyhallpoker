@@ -680,7 +680,13 @@ function Card({ valueString, size }: { valueString: string; size: "small" | "lar
         height: `${height}px`,
       }}
     >
-      <Image src={`/cards/${valueString}.png`} alt="Card Club" width={width} height={height} />
+      <Image
+        src={`/cards/${valueString}.png`}
+        alt="Card Club"
+        width={width}
+        height={height}
+        onError={(i) => ((i.target as HTMLImageElement).style.display = "none")}
+      />
     </div>
   );
 }
