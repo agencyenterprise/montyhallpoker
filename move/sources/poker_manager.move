@@ -481,6 +481,52 @@ module poker::poker_manager {
 
         assert!(game_metadata.stage == STAGE_SHOWDOWN, EINVALID_STAGE);
 
+        let activePlayers = 0;
+        let i = 0;
+        while (i < vector::length(&game_metadata.players)) {
+            let player = vector::borrow(&game_metadata.players, i);
+            if (player.status == STATUS_ACTIVE) {
+                activePlayers = activePlayers + 1;
+            };
+            i = i + 1;
+        };
+
+        debug::print(&string::utf8(b"Active players: "));
+        debug::print(&activePlayers);
+
+        if (activePlayers == 1) {
+            game_metadata.state = GAMESTATE_CLOSED;
+            
+            let winner = vector::borrow(&game_metadata.players, 0);
+            let players = game_metadata.players;
+            
+            let winner_index = 0;
+
+            let winner_addr = vector::borrow(&game_metadata.players, winner_index).id;
+
+            let housePot = fixed_point64::multiply_u128((game_metadata.pot as u128), fixed_point64::create_from_rational(1, 100));
+
+            debug::print(&string::utf8(b"HouseRRR Pot: "));
+            debug::print(&housePot);
+
+            debug::print(&string::utf8(b"Metadata PotSSSS: "));
+            debug::print(&game_metadata.pot);
+
+            let winnerReward = (game_metadata.pot as u128) - housePot;
+
+            debug::print(&string::utf8(b"House Pot: "));
+            debug::print(&housePot);
+
+            vector::push_back(&mut game_metadata.winners, winner_addr);
+
+            aptos_account::transfer(from, winner_addr, (winnerReward as u64));
+
+            debug::print(&string::utf8(b"Game metadata: "));
+            debug::print(game_metadata);
+            create_game(game_metadata.room_id);
+            return
+        };
+
         let allCards = vector::empty<Card>();
         vector::append<Card>(&mut allCards, game_metadata.deck);
         vector::append<Card>(&mut allCards, game_metadata.community);
@@ -1280,7 +1326,7 @@ module poker::poker_manager {
             perform_action(account3, game_id, FOLD, 0);
             perform_action(account4, game_id, CALL, 20000000 - 8000000);
             perform_action(account1, game_id, FOLD, 0);
-
+            
             let game_metadata = get_game_metadata_by_id(game_id);
 
             assert!(game_metadata.stage == STAGE_FLOP, EINVALID_GAME);
