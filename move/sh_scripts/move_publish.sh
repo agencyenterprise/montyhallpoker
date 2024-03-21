@@ -19,6 +19,6 @@ echo "##### Publishing module #####"
 
 aptos move publish \
 	--assume-yes \
-  --profile diamond \
-  --named-addresses poker=0xaaf7cf3e251f62ddc6966fb959c75329aea3bbef718e72b369a25ddec81023ed
+  --profile ruby \
+  --named-addresses poker=0x984eabe343cb95aeb2e79cbcf19b1fe4bfe43b9048bc093d7fc6591aa5367f08
 

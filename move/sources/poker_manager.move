@@ -483,10 +483,12 @@ module poker::poker_manager {
 
         let activePlayers = 0;
         let i = 0;
+        let lastActivePlayerIndex = 0;
         while (i < vector::length(&game_metadata.players)) {
             let player = vector::borrow(&game_metadata.players, i);
             if (player.status == STATUS_ACTIVE) {
                 activePlayers = activePlayers + 1;
+                lastActivePlayerIndex = i;
             };
             i = i + 1;
         };
@@ -497,10 +499,10 @@ module poker::poker_manager {
         if (activePlayers == 1) {
             game_metadata.state = GAMESTATE_CLOSED;
             
-            let winner = vector::borrow(&game_metadata.players, 0);
+            let winner = vector::borrow(&game_metadata.players, lastActivePlayerIndex);
             let players = game_metadata.players;
             
-            let winner_index = 0;
+            let winner_index = lastActivePlayerIndex;
 
             let winner_addr = vector::borrow(&game_metadata.players, winner_index).id;
 
