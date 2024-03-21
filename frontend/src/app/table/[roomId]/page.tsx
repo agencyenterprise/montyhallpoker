@@ -812,6 +812,7 @@ function GameEndModal({
   const newStateRef = useRef<Maybe<GameState>>();
   const winnerRef = useRef<any[]>();
   const [winners, setWinners] = useState<any[]>();
+  const [reset, setReset] = useState(false);
 
   const finishedGame = gameState && gameState?.stage === GameStage.Showdown;
 
@@ -858,6 +859,7 @@ function GameEndModal({
       });
       playSound("door");
       router.push(`/table/${newStateRef?.current?.room_id}`);
+      window.location.reload();
     } catch (error: any) {
       console.error(error);
     }
