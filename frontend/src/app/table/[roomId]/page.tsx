@@ -92,6 +92,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     window.localStorage.setItem("game", JSON.stringify(game ?? {}));
 
     if (game?.stage == GameStage.Showdown && game.state != GameStatus.CLOSE) {
+      window.localStorage.setItem("game", JSON.stringify(game ?? {}));
       const response = await fetch(`/api/reveal/all`, {
         method: "POST",
         body: JSON.stringify({ gameId: Number(game.id) }),
@@ -104,12 +105,12 @@ export default function PokerGameTable({ params }: { params: any }) {
         playSound("winner");
       }
     } else if (game?.state == GameStatus.CLOSE) {
+      window.localStorage.setItem("game", JSON.stringify(game ?? {}));
       showGameEndModalRef.current = gameState?.stage == GameStage.Showdown;
       setShowGameEndModal(true);
       setStop(true);
       playSound("winner");
       winnerRef.current = game?.winners?.join(", ");
-      alert("Game Ended! Winner is " + game?.winners?.join(", "));
     }
   };
 
