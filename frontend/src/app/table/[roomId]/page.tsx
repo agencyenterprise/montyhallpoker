@@ -820,6 +820,7 @@ function GameEndModal({
   );
 
   const joinGame = async () => {
+    const game = await getGameByRoomId(gameState.room_id);
     const wallet = getAptosWallet();
     const account = await wallet?.account();
     const meInRoom = gameState.players.find(
@@ -844,7 +845,7 @@ function GameEndModal({
         data: {
           function: `${CONTRACT_ADDRESS}::poker_manager::join_game`,
           typeArguments: [],
-          functionArguments: [`${gameState.id}`, `${gameState.stake}`],
+          functionArguments: [`${game?.id!}`, `${gameState.stake}`],
         },
       });
       await aptosClient.waitForTransaction({
@@ -856,11 +857,7 @@ function GameEndModal({
       console.error(error);
     }
   };
-  console.log(
-    gameState.players
-      .map((p) => parseAddress(p.id))
-      .indexOf(parseAddress(winnerPlayers[0].id))
-  );
+
   return (
     <Dialog.Root open={true}>
       <Dialog.Portal>
