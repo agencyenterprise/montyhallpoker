@@ -740,8 +740,11 @@ module poker::poker_manager {
         debug::print(&all_have_called_or_checked(&game_metadata.players, game_metadata.current_bet));
         // Starter player might have folded
         let nextPlayerThatIsNotFolded = vector::borrow(&game_metadata.players, (game_metadata.starter as u64));
+        let indexNextPlayerThatIsNotFolded = (game_metadata.starter as u64);
         while (nextPlayerThatIsNotFolded.status == STATUS_FOLDED) {
-            nextPlayerThatIsNotFolded = vector::borrow(&game_metadata.players, ((game_metadata.starter as u64) + 1) % vector::length(&game_metadata.players));
+            // player after nextPlayerThatIsNotFolded
+            nextPlayerThatIsNotFolded = vector::borrow(&game_metadata.players, ((indexNextPlayerThatIsNotFolded as u64) + 1) % vector::length(&game_metadata.players));
+            indexNextPlayerThatIsNotFolded = ((indexNextPlayerThatIsNotFolded as u64) + 1) % vector::length(&game_metadata.players);
         };
         debug::print(&string::utf8(b"Next player that is not folded: "));
         debug::print(nextPlayerThatIsNotFolded);
