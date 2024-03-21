@@ -89,8 +89,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
-    setShowGameEndModal(true);
-    showGameEndModalRef.current = gameState?.stage == GameStage.Showdown;
+    window.localStorage.setItem("game", JSON.stringify(game ?? {}));
 
     if (game?.stage == GameStage.Showdown && game.state != GameStatus.CLOSE) {
       const response = await fetch(`/api/reveal/all`, {
@@ -102,10 +101,13 @@ export default function PokerGameTable({ params }: { params: any }) {
       });
       const data = await response.json();
       if (data.message == "OK") {
-        setStop(true);
         playSound("winner");
       }
     } else if (game?.state == GameStatus.CLOSE) {
+      showGameEndModalRef.current = gameState?.stage == GameStage.Showdown;
+      setShowGameEndModal(true);
+      setStop(true);
+      playSound("winner");
       winnerRef.current = game?.winners?.join(", ");
       alert("Game Ended! Winner is " + game?.winners?.join(", "));
     }
@@ -824,7 +826,7 @@ function GameEndModal({
   const [reset, setReset] = useState(false);
 
   const finishedGame = gameState && gameState?.stage === GameStage.Showdown;
-
+  console.log(finishedGame, gameState);
   useEffect(() => {
     if (finishedGame) {
       updateGame().catch(console.error);
