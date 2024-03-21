@@ -16,11 +16,7 @@ import {
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import {
-  getAptosClient,
-  getAptosWallet,
-  toAptos,
-} from "../../../utils/aptosClient";
+import { getAptosClient, getAptosWallet, toAptos } from "../../../utils/aptosClient";
 import Button from "@/components/Button";
 import { parseAddress } from "@/utils/address";
 import { useRouter } from "next/navigation";
@@ -55,14 +51,13 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [gameStarted, setGameStarted] = useState(false);
   const [handRevealed, setHandRevealed] = useState(false);
   const [gameState, setGameState] = useState<Maybe<GameState>>();
-  const [gameId, setGameId] = useState<string>();
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
   const [stop, setStop] = useState(false);
   const winnerRef = useRef<string>("");
   const [showGameEndModal, setShowGameEndModal] = useState(false);
-  const showGameEndModalRef = useRef<boolean>(
-    gameState?.stage == GameStage.Showdown
-  );
+  const showGameEndModalRef = useRef<boolean>(gameState?.stage == GameStage.Showdown);
+
+  const gameId = useRef<string | undefined>();
 
   const currentGame = useRef<Maybe<GameState>>();
 
@@ -72,28 +67,26 @@ export default function PokerGameTable({ params }: { params: any }) {
   const gameWorker = async () => {
     let game;
 
-    if (!gameId) {
+    console.log("XY, gameId => ", gameId, " roomId => ", roomId);
+
+    if (!gameId.current) {
+      console.log("No gameId, getting game by roomId");
       game = await getGameByRoomId(roomId);
-      setGameId(game?.id);
+      gameId.current = game?.id;
+      setShowGameEndModal(false);
     } else {
-      game = await getGameById(Number(gameId));
+      console.log("Getting game by gameId");
+      game = await getGameById(Number(gameId.current));
+      console.log("XY, acquired game => ", game);
+      gameId.current = game?.id;
     }
+    console.log("XY, acquired game => ", game);
     if (!game) {
       return;
     }
-    if (winnerRef.current !== "") {
-      setStop(true);
-      return;
-    }
-    // We have to manually set the currentGame ref to the game we want to track
-    if (game && !currentGame.current) {
-      currentGame.current = game;
-    }
     const wallet = getAptosWallet();
     const { address } = await wallet?.account();
-    const mePlayer = game?.players.find(
-      (player) => parseAddress(player.id) === parseAddress(address)
-    )!;
+    const mePlayer = game?.players.find((player) => parseAddress(player.id) === parseAddress(address))!;
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
@@ -109,18 +102,12 @@ export default function PokerGameTable({ params }: { params: any }) {
         },
       });
       const data = await response.json();
-      router.push("/");
       if (data.message == "OK") {
         playSound("winner");
       }
-    } else if (game?.state == GameStatus.CLOSE) {
+    } else if (game?.state == GameStatus.CLOSE && game.winners.length > 0) {
       window.localStorage.setItem("game", JSON.stringify(game ?? {}));
-      showGameEndModalRef.current = gameState?.stage == GameStage.Showdown;
       setShowGameEndModal(true);
-      setStop(true);
-      playSound("winner");
-      router.push("/");
-      winnerRef.current = game?.winners?.join(", ");
     }
   };
 
@@ -134,38 +121,30 @@ export default function PokerGameTable({ params }: { params: any }) {
     console.log(gameState);
   }, [gameState]);
 
-  const previousGameState = usePrevious<Maybe<GameState> | undefined>(
-    gameState
-  );
+  useEffect(() => {
+    if (gameState?.state != GameStatus.CLOSE) {
+      setShowGameEndModal(false);
+    } else {
+      if (gameState?.winners.length > 0) setShowGameEndModal(true);
+    }
+  }, [gameState?.state]);
+
+  const previousGameState = usePrevious<Maybe<GameState> | undefined>(gameState);
 
   useEffect(() => {
     retrieveGameState();
   }, [gameState]);
 
   useEffect(() => {
-    if (
-      gameState &&
-      gameState?.state === GameStatus.INPROGRESS &&
-      !handRevealed
-    ) {
+    if (gameState && gameState?.state === GameStatus.INPROGRESS && !handRevealed) {
       revealCurrentUserCard();
       setHandRevealed(true);
     }
   }, [gameStarted, gameState]);
 
   useEffect(() => {
-    if (
-      gameState?.state == GameStatus.INPROGRESS &&
-      previousGameState?.state == GameStatus.INPROGRESS
-    ) {
-      console.log(
-        "turn ",
-        gameState?.turn,
-        " me",
-        me,
-        " previous turn",
-        previousGameState?.turn
-      );
+    if (gameState?.state == GameStatus.INPROGRESS && previousGameState?.state == GameStatus.INPROGRESS) {
+      console.log("turn ", gameState?.turn, " me", me, " previous turn", previousGameState?.turn);
       if (
         parseAddress(gameState?.turn) == parseAddress(me) &&
         parseAddress(previousGameState?.turn) != parseAddress(me)
@@ -181,46 +160,30 @@ export default function PokerGameTable({ params }: { params: any }) {
         parseAddress(gameState?.turn) != parseAddress(previousGameState?.turn)
       ) {
         // determine last action made
-        if (
-          gameState?.players?.[previousGameState?.currentPlayerIndex]?.status ==
-          1
-        ) {
+        if (gameState?.players?.[previousGameState?.currentPlayerIndex]?.status == 1) {
           playSound("fold", 0.7);
           console.log("fold");
         } else if (+gameState?.current_bet > +previousGameState?.current_bet) {
           playSound("more-chips");
           console.log("raise");
-        } else if (
-          +gameState?.current_bet == +previousGameState?.current_bet &&
-          +gameState?.current_bet > 0
-        ) {
+        } else if (+gameState?.current_bet == +previousGameState?.current_bet && +gameState?.current_bet > 0) {
           playSound("chips");
           console.log("call");
           // if last player is folded do not play check sound:
         } else if (
           +gameState?.current_bet == 0 &&
-          gameState?.players?.[previousGameState?.currentPlayerIndex]?.status !=
-            1
+          gameState?.players?.[previousGameState?.currentPlayerIndex]?.status != 1
         ) {
           playSound("wood-knock");
           console.log("check");
         }
       }
     }
-    if (
-      gameState?.stage == GameStage.Flop &&
-      previousGameState?.stage != GameStage.Flop
-    ) {
+    if (gameState?.stage == GameStage.Flop && previousGameState?.stage != GameStage.Flop) {
       revealComunityCards(gameState.id);
-    } else if (
-      gameState?.stage == GameStage.Turn &&
-      previousGameState?.stage != GameStage.Turn
-    ) {
+    } else if (gameState?.stage == GameStage.Turn && previousGameState?.stage != GameStage.Turn) {
       revealComunityCards(gameState.id);
-    } else if (
-      gameState?.stage == GameStage.River &&
-      previousGameState?.stage != GameStage.River
-    ) {
+    } else if (gameState?.stage == GameStage.River && previousGameState?.stage != GameStage.River) {
       revealComunityCards(gameState.id);
     }
   }, [gameState, me]);
@@ -261,12 +224,7 @@ export default function PokerGameTable({ params }: { params: any }) {
         setMe(account.address);
 
         setGameStarted(true);
-        console.log(
-          "Set pot ",
-          gameState?.pot,
-          " to ",
-          toAptos(gameState?.pot!)
-        );
+        console.log("Set pot ", gameState?.pot, " to ", toAptos(gameState?.pot!));
         setCurrentPot(+(gameState?.pot || 0));
       }
     } catch (error) {
@@ -276,8 +234,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   };
 
   const revealCurrentUserCard = async () => {
-    const message =
-      "By signing this transaction you'll be able to see your cards.";
+    const message = "By signing this transaction you'll be able to see your cards.";
     const nonce = Date.now().toString();
     const aptosClient = getAptosWallet();
     const response = await aptosClient.signMessage({
@@ -312,10 +269,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   return (
     <>
-      <GameEndModal
-        show={showGameEndModalRef.current || showGameEndModal}
-        gameState={gameState!}
-      />
+      <GameEndModal show={showGameEndModal} gameState={gameState!} />
       <div className="h-full w-full flex items-center justify-center relative">
         <div className="relative">
           <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
@@ -357,11 +311,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           </div>
           <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
             {communityCards.map((card, index) => (
-              <Card
-                valueString={`${card.suit}_${card.value}`}
-                size="large"
-                key={index}
-              />
+              <Card valueString={`${card.suit}_${card.value}`} size="large" key={index} />
             ))}
           </div>
           <div className="flex gap-x-4">
@@ -378,9 +328,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 }
 
 function PokerStackIcon() {
-  return (
-    <Image src="/poker-stacks.png" alt="Poker Stacks" width={20} height={15} />
-  );
+  return <Image src="/poker-stacks.png" alt="Poker Stacks" width={20} height={15} />;
 }
 interface ActionButtonsProps {
   gameState: Maybe<GameState>;
@@ -389,9 +337,7 @@ interface ActionButtonsProps {
 
 function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   const { signAndSubmitTransaction } = useWallet();
-  const [raiseValue, setRaiseValue] = useState<number>(
-    Number(gameState?.stake) || 0
-  );
+  const [raiseValue, setRaiseValue] = useState<number>(Number(gameState?.stake) || 0);
   const maxValue = Number();
   const skipInactivePlayer = async () => {
     console.log(gameState);
@@ -428,9 +374,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
       return;
     }
 
-    console.log(
-      Number(+gameState?.current_bet - +gameState!.players[meIndex].current_bet)
-    );
+    console.log(Number(+gameState?.current_bet - +gameState!.players[meIndex].current_bet));
 
     try {
       const wallet = getAptosWallet();
@@ -486,14 +430,8 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   const idleTime = Date.now() / 1000 - Number(gameState.last_action_timestamp);
   if (meIndex !== gameState?.currentPlayerIndex && idleTime > 30) {
     return (
-      <div
-        className="flex w-fit absolute bottom-4 -left-20"
-        title="You can skip an inactive player after 60s"
-      >
-        <Button
-          className="w-full whitespace-pre"
-          onClick={() => skipInactivePlayer()}
-        >
+      <div className="flex w-fit absolute bottom-4 -left-20" title="You can skip an inactive player after 60s">
+        <Button className="w-full whitespace-pre" onClick={() => skipInactivePlayer()}>
           Skip inactive player
         </Button>
       </div>
@@ -507,57 +445,32 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   return (
     <div className="flex flex-col gap-y-4 absolute bottom-4 left-4">
       <div className="flex gap-x-2 h-fit">
-        <Button
-          disabled={raiseValue <= 0}
-          onClick={() =>
-            setRaiseValue((prev) => prev - Number(gameState?.stake))
-          }
-        >
+        <Button disabled={raiseValue <= 0} onClick={() => setRaiseValue((prev) => prev - Number(gameState?.stake))}>
           -
         </Button>
         <input
           className="text-center bg-[#0F172A] text-white w-[100px] h-auto min-h-full rounded-[10px] border border-cyan-400"
           value={toAptos(raiseValue).toFixed(2)}
         />
-        <Button
-          onClick={() =>
-            setRaiseValue((prev) => prev + Number(gameState?.stake))
-          }
-        >
-          +
-        </Button>
+        <Button onClick={() => setRaiseValue((prev) => prev + Number(gameState?.stake))}>+</Button>
       </div>
-      <Button onClick={() => performAction(ACTIONS.RAISE, raiseValue)}>
-        Raise
-      </Button>
+      <Button onClick={() => performAction(ACTIONS.RAISE, raiseValue)}>Raise</Button>
       <div className="flex gap-x-4 w-full">
-        <Button
-          className="w-full"
-          onClick={() => performAction(ACTIONS.FOLD, 0)}
-        >
+        <Button className="w-full" onClick={() => performAction(ACTIONS.FOLD, 0)}>
           Fold
         </Button>
         {Number(gameState?.current_bet) > 0 && (
           <Button
             className="w-full"
             onClick={() =>
-              performAction(
-                ACTIONS.CALL,
-                Number(
-                  +gameState?.current_bet -
-                    +gameState!.players[meIndex].current_bet
-                )
-              )
+              performAction(ACTIONS.CALL, Number(+gameState?.current_bet - +gameState!.players[meIndex].current_bet))
             }
           >
             Call
           </Button>
         )}
         {Number(gameState?.current_bet) === 0 && (
-          <Button
-            className="w-full"
-            onClick={() => performAction(ACTIONS.CHECK, 0)}
-          >
+          <Button className="w-full" onClick={() => performAction(ACTIONS.CHECK, 0)}>
             Check
           </Button>
         )}
@@ -567,9 +480,7 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
 }
 
 function PokerTable() {
-  return (
-    <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />
-  );
+  return <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />;
 }
 
 interface PlayerBannerProps {
@@ -617,25 +528,15 @@ function PlayerBanner({
       <div className={classnames(width, "mx-7 relative bottom-0")}>
         {playerIndex == currentIndex && <TurnToken position={position} />}
 
-        <div className={classnames()}>
-          {playerBet > 0 && <Stack stack={playerBet} />}
-        </div>
-        {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && (
-          <Cards cards={cards} />
-        )}
+        <div className={classnames()}>{playerBet > 0 && <Stack stack={playerBet} />}</div>
+        {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && <Cards cards={cards} />}
         <div
           className={classnames(
             "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
             width
           )}
         >
-          <Image
-            src="/player-avatar.svg"
-            alt="Avatar"
-            width={81}
-            height={81}
-            className=""
-          />
+          <Image src="/player-avatar.svg" alt="Avatar" width={81} height={81} className="" />
           <div className="text-white flex flex-col justify-between py-2">
             <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
             <div>
@@ -645,12 +546,7 @@ function PlayerBanner({
               </div>
 
               <div className="flex gap-x-1 text-xs">
-                <Image
-                  src="/trophy-icon.svg"
-                  height="13"
-                  width="13"
-                  alt="icon"
-                />
+                <Image src="/trophy-icon.svg" height="13" width="13" alt="icon" />
                 <span>2/20</span>
               </div>
             </div>
@@ -673,22 +569,14 @@ function PlayerBanner({
       >
         {playerBet > 0 && <Stack stack={playerBet} />}
       </div>
-      {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && (
-        <Cards cards={cards} />
-      )}
+      {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && <Cards cards={cards} />}
       <div
         className={classnames(
           "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
           width
         )}
       >
-        <Image
-          src="/player-avatar.svg"
-          alt="Avatar"
-          width={81}
-          height={81}
-          className=""
-        />
+        <Image src="/player-avatar.svg" alt="Avatar" width={81} height={81} className="" />
         <div className="text-white flex flex-col justify-between py-2">
           <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
           <div>
@@ -748,24 +636,13 @@ function Cards({ cards }: CardsProps) {
   const cardPosition = cards?.length ? "left-4" : `left-10`;
 
   return (
-    <div
-      className={classnames(
-        "w-[91px] h-[91px] z-[1] text-white absolute -top-10",
-        cardPosition
-      )}
-    >
+    <div className={classnames("w-[91px] h-[91px] z-[1] text-white absolute -top-10", cardPosition)}>
       <div className="flex relative mx-auto">
         {!cards?.length && <BackCards />}
         {cards?.length && (
           <div className="absolute flex gap-x-[10px] -top-10">
-            <Card
-              valueString={`${cards[0].suit}_${cards[0].value}`}
-              size="large"
-            />
-            <Card
-              valueString={`${cards[1].suit}_${cards[1].value}`}
-              size="large"
-            />
+            <Card valueString={`${cards[0].suit}_${cards[0].value}`} size="large" />
+            <Card valueString={`${cards[1].suit}_${cards[1].value}`} size="large" />
           </div>
         )}
       </div>
@@ -776,31 +653,13 @@ function Cards({ cards }: CardsProps) {
 function BackCards() {
   return (
     <div>
-      <Image
-        src="/card-back.svg"
-        alt="Card Back"
-        width={61}
-        height={91}
-        className="absolute z-[2]"
-      />
-      <Image
-        src="/card-back.svg"
-        alt="Card Back"
-        width={61}
-        height={91}
-        className="absolute z-[1] left-[30px]"
-      />
+      <Image src="/card-back.svg" alt="Card Back" width={61} height={91} className="absolute z-[2]" />
+      <Image src="/card-back.svg" alt="Card Back" width={61} height={91} className="absolute z-[1] left-[30px]" />
     </div>
   );
 }
 
-function Card({
-  valueString,
-  size,
-}: {
-  valueString: string;
-  size: "small" | "large";
-}) {
+function Card({ valueString, size }: { valueString: string; size: "small" | "large" }) {
   const width = size === "small" ? 61 : 95;
   const height = size === "small" ? 91 : 144;
   return (
@@ -811,23 +670,12 @@ function Card({
         height: `${height}px`,
       }}
     >
-      <Image
-        src={`/cards/${valueString}.png`}
-        alt="Card Club"
-        width={width}
-        height={height}
-      />
+      <Image src={`/cards/${valueString}.png`} alt="Card Club" width={width} height={height} />
     </div>
   );
 }
 
-function GameEndModal({
-  show,
-  gameState,
-}: {
-  show: boolean;
-  gameState: GameState;
-}) {
+function GameEndModal({ show, gameState }: { show: boolean; gameState: GameState }) {
   console.log("oie", gameState, show);
   const router = useRouter();
   const { signAndSubmitTransaction } = useWallet();
@@ -839,29 +687,18 @@ function GameEndModal({
   const finishedGame = gameState && gameState?.stage === GameStage.Showdown;
   console.log(finishedGame, gameState);
   useEffect(() => {
-    if (finishedGame) {
-      console.log("carreguei game");
-      updateGame().catch(console.error);
+    newStateRef.current = gameState;
+    if (gameState?.state == GameStatus.CLOSE) {
+      const winnerAdd = gameState.winners.map((pa) => parseAddress(pa));
+      const winnerPlayers = gameState.players.filter((player: any) => winnerAdd.includes(parseAddress(player.id)));
+      setWinners(winnerPlayers);
     }
-  }, []);
+  }, [gameState]);
 
   if (!finishedGame) {
     return <></>;
   }
   console.log("fnishei");
-
-  const updateGame = async () => {
-    const gameStorage = JSON.parse(window.localStorage.getItem("game") ?? "{}");
-    console.log("gamestorage", gameStorage);
-    const newGame = await getGameById(Number(gameStorage?.id)!);
-    console.log("new game", newGame);
-    newStateRef.current = newGame as GameState;
-    const winnerAdd = newStateRef.current.winners.map((pa) => parseAddress(pa));
-    winnerRef.current = newStateRef.current.players.filter((player: any) =>
-      winnerAdd.includes(parseAddress(player.id))
-    );
-    setWinners(winnerRef?.current!);
-  };
 
   const joinGame = async () => {
     const gameStorage = JSON.parse(window.localStorage.getItem("game") ?? "{}");
@@ -899,9 +736,7 @@ function GameEndModal({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-dialogOverlay backdrop-blur-sm" />
         <Dialog.Content className="z-50 fixed top-1/2 left-1/2 transform bg-[#0F172A] -translate-x-1/2 border border-cyan-400 rounded-lg -translate-y-1/2 shadow-md w-[50vw] h-[600px] min-w-[600px] min-h-[200px] p-6">
           <div className="nes-container is-dark with-title w-[100%] h-[100%] text-white">
-            <Dialog.Title className="text-2xl font-bold text-center">
-              End Game
-            </Dialog.Title>
+            <Dialog.Title className="text-2xl font-bold text-center">End Game</Dialog.Title>
             <br />
             <div className="w-full h-full flex flex-col items-center gap-y-40 ">
               <>
@@ -912,18 +747,14 @@ function GameEndModal({
                       relative={true}
                       isMe={true}
                       gameState={newStateRef.current!}
-                      currentIndex={
-                        newStateRef.current?.currentPlayerIndex || 0
-                      }
+                      currentIndex={newStateRef.current?.currentPlayerIndex || 0}
                       playerIndex={
-                        newStateRef?.current?.players
-                          .map((p) => parseAddress(p.id))
-                          .indexOf(parseAddress(winner.id))!
+                        newStateRef?.current?.players.map((p) => parseAddress(p.id)).indexOf(parseAddress(winner.id))!
                       }
                       stack={1000}
                       position={0}
                       cards={
-                        winner.hand.map((card: any) => {
+                        winner.hand?.map((card: any) => {
                           console.log({
                             suit: `${parseHexTostring(card?.suit_string!)}`,
                             value: `${parseHexTostring(card?.value_string!)}`,
