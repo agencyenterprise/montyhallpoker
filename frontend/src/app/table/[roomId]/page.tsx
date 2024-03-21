@@ -11,6 +11,7 @@ import {
   getGameByRoomId,
   GameStatus,
   PlayerStatus,
+  getGameById,
 } from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
@@ -68,6 +69,10 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   const gameWorker = async () => {
     const game = await getGameByRoomId(roomId);
+    if (winnerRef.current !== "") {
+      setStop(true);
+      return;
+    }
     // We have to manually set the currentGame ref to the game we want to track
     if (game && !currentGame.current) {
       currentGame.current = game;
@@ -292,11 +297,7 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   return (
     <>
-      <GameEndModal
-        show={showGameEndModalRef.current}
-        winner={winnerRef.current}
-        gameState={gameState!}
-      />
+      <GameEndModal show={showGameEndModalRef.current} gameState={gameState!} />
       <div className="h-full w-full flex items-center justify-center relative">
         <div className="relative">
           <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
@@ -550,6 +551,7 @@ function PokerTable() {
 }
 
 interface PlayerBannerProps {
+  relative?: boolean;
   isMe: boolean;
   currentIndex: number;
   playerIndex: number;
@@ -559,6 +561,7 @@ interface PlayerBannerProps {
   position: number;
 }
 function PlayerBanner({
+  relative,
   isMe,
   currentIndex,
   playerIndex: index,
@@ -581,10 +584,59 @@ function PlayerBanner({
       </div>
     );
   }
+
   const playerBet = Number(gameState.players[playerIndex].current_bet);
   const playerStack = gameState.players[playerIndex];
   const playerCards = gameState.players[playerIndex].hand;
   const playerStatus = gameState.players[playerIndex].status;
+
+  if (relative) {
+    return (
+      <div className={classnames(width, "mx-7 relative bottom-0")}>
+        {playerIndex == currentIndex && <TurnToken position={position} />}
+
+        <div className={classnames()}>
+          {playerBet > 0 && <Stack stack={playerBet} />}
+        </div>
+        {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && (
+          <Cards cards={cards} />
+        )}
+        <div
+          className={classnames(
+            "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
+            width
+          )}
+        >
+          <Image
+            src="/player-avatar.svg"
+            alt="Avatar"
+            width={81}
+            height={81}
+            className=""
+          />
+          <div className="text-white flex flex-col justify-between py-2">
+            <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
+            <div>
+              <div className="flex gap-x-1 text-xs">
+                <StackIcon />
+                <span>{1000}</span>
+              </div>
+
+              <div className="flex gap-x-1 text-xs">
+                <Image
+                  src="/trophy-icon.svg"
+                  height="13"
+                  width="13"
+                  alt="icon"
+                />
+                <span>2/20</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
@@ -592,9 +644,9 @@ function PlayerBanner({
 
       <div
         className={classnames(
-          "absolute ",
-          position == 0 || position == 3 ? "-top-[120px] " : "",
-          position == 1 || position == 2 ? "-bottom-[120px]" : ""
+          relative ? "" : "absolute ",
+          (position == 0 || position == 3) && !relative ? "-top-[120px] " : "",
+          (position == 1 || position == 2) && !relative ? "-bottom-[120px]" : ""
         )}
       >
         {playerBet > 0 && <Stack stack={playerBet} />}
@@ -750,21 +802,21 @@ function Card({
 function GameEndModal({
   show,
   gameState,
-  winner,
 }: {
   show: boolean;
   gameState: GameState;
-  winner: string;
 }) {
+  console.log("oie", gameState, show);
   const router = useRouter();
   const { signAndSubmitTransaction } = useWallet();
-  if (!gameState && !show) {
-    return;
+  const finishedGame = gameState && gameState?.stage === GameStage.Showdown;
+  if (!finishedGame) {
+    return <></>;
   }
+  const winnerAdd = gameState.winners.map((pa) => parseAddress(pa));
+  console.log(winnerAdd);
   const winnerPlayers = gameState.players.filter((player: any) =>
-    gameState.winners
-      .map((pa) => parseAddress(pa))
-      .includes(parseAddress(player.address))
+    winnerAdd.includes(parseAddress(player.id))
   );
 
   const joinGame = async () => {
@@ -804,24 +856,28 @@ function GameEndModal({
       console.error(error);
     }
   };
-
+  console.log(
+    gameState.players
+      .map((p) => parseAddress(p.id))
+      .indexOf(parseAddress(winnerPlayers[0].id))
+  );
   return (
-    <Dialog.Root open={show}>
+    <Dialog.Root open={true}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-dialogOverlay backdrop-blur-sm" />
-        <Dialog.Content className="z-50 fixed top-1/2 left-1/2 transform bg-white -translate-x-1/2 -translate-y-1/2 shadow-md w-[50vw] h-[30vh] min-w-[600px] min-h-[200px] p-6">
-          <div className="nes-container is-dark with-title w-[100%] h-[100%]">
+        <Dialog.Content className="z-50 fixed top-1/2 left-1/2 transform bg-[#0F172A] -translate-x-1/2 border border-cyan-400 rounded-lg -translate-y-1/2 shadow-md w-[50vw] h-[600px] min-w-[600px] min-h-[200px] p-6">
+          <div className="nes-container is-dark with-title w-[100%] h-[100%] text-white">
             <Dialog.Title className="text-2xl font-bold text-center">
               End Game
             </Dialog.Title>
             <br />
-            <Dialog.Description>
-              <div className="w-full h-full flex flex-col items-center justify-center">
-                <>
-                  <h1>Congratulations to the winner!</h1>
-                  <p>{winner}</p>
-                  {winnerPlayers.map((winner) => {
+            <div className="w-full h-full flex flex-col items-center gap-y-40 ">
+              <>
+                <h1>Congratulations to the winner!</h1>
+                {winnerPlayers.map((winner) => (
+                  <div className="flex flex-col items-end ">
                     <PlayerBanner
+                      relative={true}
                       isMe={true}
                       gameState={gameState!}
                       currentIndex={gameState?.currentPlayerIndex || 0}
@@ -831,17 +887,25 @@ function GameEndModal({
                       stack={1000}
                       position={0}
                       cards={
-                        winner.hand.map((card) => ({
-                          suit: `${parseHexTostring(card?.suit_string!)}`,
-                          value: `${parseHexTostring(card?.value_string!)}`,
-                        })) as PlayerCards[]
+                        winner.hand.map((card) => {
+                          console.log({
+                            suit: `${parseHexTostring(card?.suit_string!)}`,
+                            value: `${parseHexTostring(card?.value_string!)}`,
+                          });
+                          return {
+                            suit: `${parseHexTostring(card?.suit_string!)}`,
+                            value: `${parseHexTostring(card?.value_string!)}`,
+                          };
+                        }) as PlayerCards[]
                       }
-                    />;
-                  })}
-                  <Button onClick={joinGame}>Join Next Game</Button>
-                </>
-              </div>
-            </Dialog.Description>
+                    />
+                  </div>
+                ))}
+                <Button className="text-[#0F172A]" onClick={joinGame}>
+                  Join Next Game
+                </Button>
+              </>
+            </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
@@ -854,5 +918,6 @@ function parseHexTostring(hexString: string) {
   for (let i = 0; i < hexString.length; i += 2) {
     str += String.fromCharCode(parseInt(hexString.substr(i, 2), 16));
   }
-  return str;
+  console.log(hexString, str);
+  return str.split("\x00")[1];
 }
