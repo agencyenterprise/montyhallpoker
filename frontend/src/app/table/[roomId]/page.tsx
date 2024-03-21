@@ -58,6 +58,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   const [userCards, setUserCards] = useState<PlayerCards[]>([]);
   const [stop, setStop] = useState(false);
   const winnerRef = useRef<string>("");
+  const [showGameEndModal, setShowGameEndModal] = useState(false);
   const showGameEndModalRef = useRef<boolean>(
     gameState?.stage == GameStage.Showdown
   );
@@ -88,6 +89,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
+    setShowGameEndModal(true);
     showGameEndModalRef.current = gameState?.stage == GameStage.Showdown;
 
     if (game?.stage == GameStage.Showdown && game.state != GameStatus.CLOSE) {
@@ -297,7 +299,10 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   return (
     <>
-      <GameEndModal show={showGameEndModalRef.current} gameState={gameState!} />
+      <GameEndModal
+        show={showGameEndModalRef.current || showGameEndModal}
+        gameState={gameState!}
+      />
       <div className="h-full w-full flex items-center justify-center relative">
         <div className="relative">
           <div className="absolute max-w-[582px] flex justify-between w-full top-0 left-[290px]">
@@ -376,13 +381,14 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
   );
   const maxValue = Number();
   const skipInactivePlayer = async () => {
+    console.log(gameState);
     try {
       if (!gameState?.id) {
         return;
       }
       const currentUnixTimestamp = Math.floor(Date.now() / 1000);
       const lastActionUnixTimestamp = Number(gameState!.last_action_timestamp);
-      if (currentUnixTimestamp - lastActionUnixTimestamp < 60) {
+      if (currentUnixTimestamp - lastActionUnixTimestamp < 30) {
         return;
       }
       const wallet = getAptosWallet();
@@ -471,7 +477,10 @@ function ActionButtons({ meIndex, gameState }: ActionButtonsProps) {
         className="flex w-fit absolute bottom-4 -left-20"
         title="You can skip an inactive player after 60s"
       >
-        <Button className="w-full whitespace-pre" onClick={skipInactivePlayer}>
+        <Button
+          className="w-full whitespace-pre"
+          onClick={() => skipInactivePlayer()}
+        >
           Skip inactive player
         </Button>
       </div>
