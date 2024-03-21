@@ -590,8 +590,14 @@ function PlayerBanner({
     <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
       {playerIndex == currentIndex && <TurnToken position={position} />}
 
-      <div className={classnames("absolute -top-[120px] ")}>
-        <Stack stack={playerBet} />
+      <div
+        className={classnames(
+          "absolute ",
+          position == 0 || position == 3 ? "-top-[120px] " : "",
+          position == 1 || position == 2 ? "-bottom-[120px]" : ""
+        )}
+      >
+        {playerBet > 0 && <Stack stack={playerBet} />}
       </div>
       {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && (
         <Cards cards={cards} />
