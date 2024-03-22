@@ -125,6 +125,7 @@ export function ActionButtons({
       </div>
     );
   }
+
   const idleTime = Date.now() / 1000 - Number(gameState.last_action_timestamp);
   if (meIndex !== gameState?.currentPlayerIndex && idleTime > 30) {
     return (
@@ -181,7 +182,9 @@ export function ActionButtons({
         {raiseValue > 0 && raiseValue !== currentBet && (
           <Button
             className="w-full"
-            onClick={() => performAction(ACTIONS.RAISE, raiseValue)}
+            onClick={() =>
+              performAction(ACTIONS.RAISE, raiseValue - +gameState.current_bet)
+            }
           >
             Raise
           </Button>

@@ -320,14 +320,12 @@ export default function PokerGameTable({ params }: { params: any }) {
             ))}
           </div>
           <div className="flex gap-x-4">
-            {meIndex == gameState?.currentPlayerIndex && (
-              <ActionButtons
-                meIndex={meIndex}
-                stake={Number(gameState?.stake || 0)}
-                currentBet={Number(gameState?.current_bet ?? 0)}
-                gameState={gameState!}
-              />
-            )}
+            <ActionButtons
+              meIndex={meIndex}
+              stake={Number(gameState?.stake || 0)}
+              currentBet={Number(gameState?.current_bet ?? 0)}
+              gameState={gameState!}
+            />
           </div>
           <div className="absolute right-40 h-full flex justify-center gap-x-2 items-center text-white">
             <Stack stack={currentPot} />
