@@ -4,11 +4,7 @@ import { playSound } from "@/utils/audio";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Maybe } from "aptos";
 import { useEffect, useState } from "react";
-import {
-  GameState,
-  CONTRACT_ADDRESS,
-  GameStatus,
-} from "../../../controller/contract";
+import { GameState, CONTRACT_ADDRESS, GameStatus } from "../../../controller/contract";
 import Button from "../Button";
 
 const aptosClient = getAptosClient();
@@ -28,12 +24,7 @@ const ACTIONS = {
   ALL_IN: 4,
 };
 
-export function ActionButtons({
-  meIndex,
-  currentBet,
-  stake,
-  gameState,
-}: ActionButtonsProps) {
+export function ActionButtons({ meIndex, currentBet, stake, gameState }: ActionButtonsProps) {
   const { signAndSubmitTransaction } = useWallet();
   const [raiseValue, setRaiseValue] = useState<number>(currentBet);
   const [playerBet, setPlayerBet] = useState<number>(0);
@@ -142,14 +133,8 @@ export function ActionButtons({
   const idleTime = Date.now() / 1000 - Number(gameState.last_action_timestamp);
   if (meIndex !== gameState?.currentPlayerIndex && idleTime > 30) {
     return (
-      <div
-        className="flex w-fit absolute bottom-4 -left-20"
-        title="You can skip an inactive player after 60s"
-      >
-        <Button
-          className="w-full whitespace-pre"
-          onClick={() => skipInactivePlayer()}
-        >
+      <div className="flex w-fit absolute bottom-4 -left-20">
+        <Button className="w-full whitespace-pre" onClick={() => skipInactivePlayer()}>
           Skip inactive player
         </Button>
       </div>
@@ -178,34 +163,22 @@ export function ActionButtons({
       </div>
 
       <div className="flex gap-x-4 w-full">
-        <Button
-          className="w-full"
-          onClick={() => performAction(ACTIONS.FOLD, 0)}
-        >
+        <Button className="w-full" onClick={() => performAction(ACTIONS.FOLD, 0)}>
           Fold
         </Button>
         {currentBet > 0 && raiseValue == currentBet && (
-          <Button
-            className="w-full"
-            onClick={() => performAction(ACTIONS.CALL, 0)}
-          >
+          <Button className="w-full" onClick={() => performAction(ACTIONS.CALL, 0)}>
             Call
           </Button>
         )}
         {raiseValue > 0 && raiseValue !== currentBet && (
-          <Button
-            className="w-full"
-            onClick={() => performAction(ACTIONS.RAISE, raiseValue - playerBet)}
-          >
+          <Button className="w-full" onClick={() => performAction(ACTIONS.RAISE, raiseValue - playerBet)}>
             Raise
           </Button>
         )}
 
         {Number(currentBet) === 0 && raiseValue === 0 && (
-          <Button
-            className="w-full"
-            onClick={() => performAction(ACTIONS.CHECK, 0)}
-          >
+          <Button className="w-full" onClick={() => performAction(ACTIONS.CHECK, 0)}>
             Check
           </Button>
         )}
