@@ -5,7 +5,7 @@ import { playSound } from "@/utils/audio";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Maybe } from "aptos";
-import { useRouter } from "next/router";
+import { useRouter } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
 import {
   GameState,

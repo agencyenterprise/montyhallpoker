@@ -6,7 +6,10 @@ import { GameState, PlayerStatus } from "../../../controller/contract";
 import { Card, PlayerCards } from "../PlayerCards";
 import { StackIcon } from "../Icons";
 import { Stack } from "../Stack";
+import { getAptosClient, toAptos } from "@/utils/aptosClient";
+import { useState } from "react";
 
+const aptosClient = getAptosClient();
 interface PlayerBannerProps {
   relative?: boolean;
   isMe: boolean;
@@ -26,8 +29,10 @@ export function PlayerBanner({
   cards,
   position,
 }: PlayerBannerProps) {
+  const [walletAmount, setWalletAmount] = useState<number | null>(null);
   const width = isMe ? "w-[230px]" : "w-[174px]";
   const playerIndex = index;
+
   if (typeof gameState?.players[playerIndex] === "undefined") {
     return (
       <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
@@ -41,7 +46,15 @@ export function PlayerBanner({
       </div>
     );
   }
-
+  aptosClient
+    .getAccountResource({
+      accountAddress: gameState?.players[playerIndex].id,
+      resourceType: "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+    })
+    .then((accountResource) => {
+      setWalletAmount(toAptos(Number(accountResource.coin.value)));
+    });
+  // const balance = accountResource.data.coin.value;
   const playerBet = Number(gameState.players[playerIndex].current_bet);
   const playerCards = gameState.players[playerIndex].hand;
   const playerStatus = gameState.players[playerIndex].status;
@@ -75,7 +88,7 @@ export function PlayerBanner({
             <div>
               <div className="flex gap-x-1 text-xs">
                 <StackIcon />
-                <span>{1000}</span>
+                <span>{walletAmount?.toFixed(2)}</span>
               </div>
 
               <div className="flex gap-x-1 text-xs">
@@ -123,17 +136,12 @@ export function PlayerBanner({
           height={81}
           className=""
         />
-        <div className="text-white flex flex-col justify-between py-2">
+        <div className="text-white flex flex-col justify-center py-2">
           <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
           <div>
-            <div className="flex gap-x-1 text-xs">
+            <div className="flex gap-x-1 text-xs mt-2">
               <StackIcon />
-              <span>{1000}</span>
-            </div>
-
-            <div className="flex gap-x-1 text-xs">
-              <Image src="/trophy-icon.svg" height="13" width="13" alt="icon" />
-              <span>2/20</span>
+              <span>{walletAmount?.toFixed(2)}</span>
             </div>
           </div>
         </div>

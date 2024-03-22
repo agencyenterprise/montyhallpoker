@@ -56,10 +56,12 @@ export default function PokerGameTable({ params }: { params: any }) {
       return;
     }
     const wallet = getAptosWallet();
-    const { address } = await wallet?.account();
+
+    const { address, ...rest } = await wallet?.account();
     const mePlayer = game?.players.find(
       (player) => parseAddress(player.id) === parseAddress(address)
     )!;
+
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
     setGameState(game);
