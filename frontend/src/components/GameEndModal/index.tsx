@@ -7,24 +7,20 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Maybe } from "aptos";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
-import {
-  GameState,
-  GameStage,
-  GameStatus,
-  getGameByRoomId,
-  CONTRACT_ADDRESS,
-} from "../../../controller/contract";
+import { GameState, GameStage, GameStatus, getGameByRoomId, CONTRACT_ADDRESS } from "../../../controller/contract";
 import Button from "../Button";
 import { PlayerBanner } from "../PlayerBanner";
 import { Card } from "../PlayerCards";
+import { SingleCard } from "../SingleCard";
 
 const aptosClient = getAptosClient();
 
 interface GameEndModalProps {
   show: boolean;
+  communityCards?: Card[];
   gameState: GameState;
 }
-export function GameEndModal({ show, gameState }: GameEndModalProps) {
+export function GameEndModal({ show, gameState, communityCards }: GameEndModalProps) {
   const router = useRouter();
   const { signAndSubmitTransaction } = useWallet();
   const newStateRef = useRef<Maybe<GameState>>();
@@ -35,9 +31,7 @@ export function GameEndModal({ show, gameState }: GameEndModalProps) {
     newStateRef.current = gameState;
     if (gameState?.state == GameStatus.CLOSE) {
       const winnerAdd = gameState.winners.map((pa) => parseAddress(pa));
-      const winnerPlayers = gameState.players.filter((player: any) =>
-        winnerAdd.includes(parseAddress(player.id))
-      );
+      const winnerPlayers = gameState.players.filter((player: any) => winnerAdd.includes(parseAddress(player.id)));
       setWinners(winnerPlayers);
     }
   }, [gameState]);
@@ -82,39 +76,50 @@ export function GameEndModal({ show, gameState }: GameEndModalProps) {
         <Dialog.Overlay className="fixed inset-0 z-50 bg-dialogOverlay backdrop-blur-sm" />
         <Dialog.Content className="z-50 fixed top-1/2 left-1/2 transform bg-[#0F172A] -translate-x-1/2 border border-cyan-400 rounded-lg -translate-y-1/2 shadow-md w-[50vw] h-[600px] min-w-[600px] min-h-[200px] p-6">
           <div className="nes-container is-dark with-title w-[100%] h-[100%] text-white">
-            <Dialog.Title className="text-2xl font-bold text-center">
-              End Game
-            </Dialog.Title>
+            <Dialog.Title className="text-2xl font-bold text-center mb-8">Winner</Dialog.Title>
             <br />
-            <div className="w-full h-full flex flex-col items-center gap-y-40 ">
+            <div className="w-full h-5/6 flex flex-col items-center justify-evenly">
               <>
-                <h1>Congratulations to the winner!</h1>
-                {winners?.map((winner: any) => (
-                  <div className="flex flex-col items-end ">
-                    <PlayerBanner
-                      relative={true}
-                      isMe={true}
-                      gameState={newStateRef.current!}
-                      currentIndex={
-                        newStateRef.current?.currentPlayerIndex || 0
-                      }
-                      playerIndex={
-                        newStateRef?.current?.players
-                          .map((p) => parseAddress(p.id))
-                          .indexOf(parseAddress(winner.id))!
-                      }
-                      stack={1000}
-                      position={0}
-                      cards={winner.hand?.map((card: any) => ({
-                        suit: `${parseHexTostring(card?.suit_string!)}`,
-                        value: `${parseHexTostring(card?.value_string!)}`,
-                      }))}
-                    />
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex justify-evenly items-center gap-2">
+                    {winners?.map((winner: any) => (
+                      <div className="flex flex-col items-end ">
+                        <PlayerBanner
+                          relative={true}
+                          isMe={true}
+                          gameState={newStateRef.current!}
+                          currentIndex={newStateRef.current?.currentPlayerIndex || 0}
+                          playerIndex={
+                            newStateRef?.current?.players
+                              .map((p) => parseAddress(p.id))
+                              .indexOf(parseAddress(winner.id))!
+                          }
+                          stack={1000}
+                          position={0}
+                          cards={winner.hand?.map((card: any) => ({
+                            suit: `${parseHexTostring(card?.suit_string!)}`,
+                            value: `${parseHexTostring(card?.value_string!)}`,
+                          }))}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <Button className="text-[#0F172A]" onClick={joinGame}>
-                  Join Next Game
-                </Button>
+                  {!!communityCards?.length && (
+                    <div className="w-full flex gap-x-3 items-center justify-center">
+                      {communityCards.map((card, index) => (
+                        <SingleCard valueString={`${card.suit}_${card.value}`} size="large" key={index} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 items-center justify-center w-2/6">
+                  <Button className="text-[#0F172A] w-full" onClick={joinGame}>
+                    Join Next Game
+                  </Button>
+                  <Button className="text-[#0F172A] w-full" onClick={() => router.push("/")}>
+                    Browse Rooms
+                  </Button>
+                </div>
               </>
             </div>
           </div>

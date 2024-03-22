@@ -2,13 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import {
-  GameState,
-  GameStage,
-  getGameByRoomId,
-  GameStatus,
-  getGameById,
-} from "../../../../controller/contract";
+import { GameState, GameStage, getGameByRoomId, GameStatus, getGameById } from "../../../../controller/contract";
 import { Maybe } from "aptos";
 import { usePollingEffect } from "@/hooks/usePoolingEffect";
 import { getAptosWallet, toAptos } from "../../../utils/aptosClient";
@@ -58,9 +52,7 @@ export default function PokerGameTable({ params }: { params: any }) {
     const wallet = getAptosWallet();
 
     const { address, ...rest } = await wallet?.account();
-    const mePlayer = game?.players.find(
-      (player) => parseAddress(player.id) === parseAddress(address)
-    )!;
+    const mePlayer = game?.players.find((player) => parseAddress(player.id) === parseAddress(address))!;
 
     const mePlayerIndex = game?.players.indexOf(mePlayer);
     setMeIndex(mePlayerIndex || 0);
@@ -100,30 +92,21 @@ export default function PokerGameTable({ params }: { params: any }) {
     }
   }, [gameState?.state]);
 
-  const previousGameState = usePrevious<Maybe<GameState> | undefined>(
-    gameState
-  );
+  const previousGameState = usePrevious<Maybe<GameState> | undefined>(gameState);
 
   useEffect(() => {
     retrieveGameState();
   }, [gameState]);
 
   useEffect(() => {
-    if (
-      gameState &&
-      gameState?.state === GameStatus.INPROGRESS &&
-      !handRevealed
-    ) {
+    if (gameState && gameState?.state === GameStatus.INPROGRESS && !handRevealed) {
       revealCurrentUserCard();
       setHandRevealed(true);
     }
   }, [gameStarted, gameState]);
 
   useEffect(() => {
-    if (
-      gameState?.state == GameStatus.INPROGRESS &&
-      previousGameState?.state == GameStatus.INPROGRESS
-    ) {
+    if (gameState?.state == GameStatus.INPROGRESS && previousGameState?.state == GameStatus.INPROGRESS) {
       if (
         parseAddress(gameState?.turn) == parseAddress(me) &&
         parseAddress(previousGameState?.turn) != parseAddress(me)
@@ -139,42 +122,27 @@ export default function PokerGameTable({ params }: { params: any }) {
         parseAddress(gameState?.turn) != parseAddress(previousGameState?.turn)
       ) {
         // determine last action made
-        if (
-          gameState?.players?.[previousGameState?.currentPlayerIndex]?.status ==
-          1
-        ) {
+        if (gameState?.players?.[previousGameState?.currentPlayerIndex]?.status == 1) {
           playSound("fold", 0.7);
         } else if (+gameState?.current_bet > +previousGameState?.current_bet) {
           playSound("more-chips");
-        } else if (
-          +gameState?.current_bet == +previousGameState?.current_bet &&
-          +gameState?.current_bet > 0
-        ) {
+        } else if (+gameState?.current_bet == +previousGameState?.current_bet && +gameState?.current_bet > 0) {
           playSound("chips");
           // if last player is folded do not play check sound:
         } else if (
           +gameState?.current_bet == 0 &&
-          gameState?.players?.[previousGameState?.currentPlayerIndex]?.status !=
-            1
+          gameState?.players?.[previousGameState?.currentPlayerIndex]?.status != 1 &&
+          gameState?.stage == previousGameState?.stage
         ) {
           playSound("wood-knock");
         }
       }
     }
-    if (
-      gameState?.stage == GameStage.Flop &&
-      previousGameState?.stage != GameStage.Flop
-    ) {
+    if (gameState?.stage == GameStage.Flop && previousGameState?.stage != GameStage.Flop) {
       revealComunityCards(gameState.id);
-    } else if (
-      gameState?.stage == GameStage.Turn &&
-      previousGameState?.stage != GameStage.Turn
-    ) {
+    } else if (gameState?.stage == GameStage.Turn && previousGameState?.stage != GameStage.Turn) {
       revealComunityCards(gameState.id);
-    } else if (
-      gameState?.stage == GameStage.River &&
-      previousGameState?.stage != GameStage.River
-    ) {
+    } else if (gameState?.stage == GameStage.River && previousGameState?.stage != GameStage.River) {
       revealComunityCards(gameState.id);
     }
   }, [gameState, me]);
@@ -224,8 +192,7 @@ export default function PokerGameTable({ params }: { params: any }) {
   };
 
   const revealCurrentUserCard = async () => {
-    const message =
-      "By signing this transaction you'll be able to see your cards.";
+    const message = "By signing this transaction you'll be able to see your cards.";
     const nonce = Date.now().toString();
     const aptosClient = getAptosWallet();
     const response = await aptosClient.signMessage({
@@ -260,15 +227,12 @@ export default function PokerGameTable({ params }: { params: any }) {
 
   return (
     <>
-      <GameEndModal show={showGameEndModal} gameState={gameState!} />
+      <GameEndModal show={showGameEndModal} gameState={gameState!} communityCards={communityCards} />
       <div className="h-full w-full flex items-center justify-center relative">
         {gameState?.state === GameStatus.INPROGRESS && (
           <div className="absolute top-4 left-4">
             <div className="text-white whitespace-pre font-bold text-2xl">
-              {
-                AVAILABLE_ROOMS.find((room) => room.id === gameState?.room_id)
-                  ?.name
-              }
+              {AVAILABLE_ROOMS.find((room) => room.id === gameState?.room_id)?.name}
             </div>
           </div>
         )}
@@ -312,11 +276,7 @@ export default function PokerGameTable({ params }: { params: any }) {
           </div>
           <div className="absolute h-full w-full flex gap-x-3 items-center justify-center">
             {communityCards.map((card, index) => (
-              <SingleCard
-                valueString={`${card.suit}_${card.value}`}
-                size="large"
-                key={index}
-              />
+              <SingleCard valueString={`${card.suit}_${card.value}`} size="large" key={index} />
             ))}
           </div>
           <div className="flex gap-x-4">
@@ -338,7 +298,5 @@ export default function PokerGameTable({ params }: { params: any }) {
 }
 
 function PokerTable() {
-  return (
-    <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />
-  );
+  return <Image src="/poker-table.png" alt="Poker Table" width={1200} height={800} />;
 }

@@ -88,11 +88,6 @@ export function PlayerBanner({
                 <StackIcon />
                 <span>{walletAmount?.toFixed(2)}</span>
               </div>
-
-              <div className="flex gap-x-1 text-xs">
-                <Image src="/trophy-icon.svg" height="13" width="13" alt="icon" />
-                <span>2/20</span>
-              </div>
             </div>
           </div>
         </div>
