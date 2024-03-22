@@ -279,14 +279,16 @@ export default function PokerGameTable({ params }: { params: any }) {
               <SingleCard valueString={`${card.suit}_${card.value}`} size="large" key={index} />
             ))}
           </div>
-          <div className="flex gap-x-4">
-            <ActionButtons
-              meIndex={meIndex}
-              stake={Number(gameState?.stake || 0)}
-              currentBet={Number(gameState?.current_bet ?? 0)}
-              gameState={gameState!}
-            />
-          </div>
+          {gameState?.state !== GameStatus.CLOSE && (
+            <div className="flex gap-x-4">
+              <ActionButtons
+                meIndex={meIndex}
+                stake={Number(gameState?.stake || 0)}
+                currentBet={Number(gameState?.current_bet ?? 0)}
+                gameState={gameState!}
+              />
+            </div>
+          )}
           <div className="absolute right-40 h-full flex justify-center gap-x-2 items-center text-white">
             <Stack stack={currentPot} />
           </div>
