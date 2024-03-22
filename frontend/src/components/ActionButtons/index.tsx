@@ -3,7 +3,7 @@ import { getAptosClient, getAptosWallet, toAptos } from "@/utils/aptosClient";
 import { playSound } from "@/utils/audio";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Maybe } from "aptos";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   GameState,
   CONTRACT_ADDRESS,
@@ -36,6 +36,19 @@ export function ActionButtons({
 }: ActionButtonsProps) {
   const { signAndSubmitTransaction } = useWallet();
   const [raiseValue, setRaiseValue] = useState<number>(currentBet);
+  const [playerBet, setPlayerBet] = useState<number>(0);
+
+  useEffect(() => {
+    setRaiseValue(currentBet);
+  }, [currentBet]);
+
+  useEffect(() => {
+    const bet = gameState?.players[meIndex]?.current_bet;
+    if (bet) {
+      console.log(bet);
+      setPlayerBet(Number(bet));
+    }
+  }, [meIndex]);
 
   const skipInactivePlayer = async () => {
     try {
@@ -182,9 +195,7 @@ export function ActionButtons({
         {raiseValue > 0 && raiseValue !== currentBet && (
           <Button
             className="w-full"
-            onClick={() =>
-              performAction(ACTIONS.RAISE, raiseValue - +gameState.current_bet)
-            }
+            onClick={() => performAction(ACTIONS.RAISE, raiseValue - playerBet)}
           >
             Raise
           </Button>
