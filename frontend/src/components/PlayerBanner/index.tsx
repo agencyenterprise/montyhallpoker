@@ -33,6 +33,22 @@ export function PlayerBanner({
   const width = isMe ? "w-[230px]" : "w-[174px]";
   const playerIndex = index;
 
+  useEffect(() => {
+    if (!walletAmount) {
+      aptosClient
+        ?.getAccountResource({
+          accountAddress: gameState?.players[playerIndex].id,
+          resourceType: "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+        })
+        .then((accountResource) => {
+          setWalletAmount(toAptos(Number(accountResource.coin.value)));
+        })
+        .catch((e) => {
+          console.error(e);
+        });
+    }
+  }, [gameState?.players[playerIndex]]);
+
   if (typeof gameState?.players[playerIndex] === "undefined") {
     return (
       <div className={classnames("relative", width, !isMe ? "mx-7" : "")}>
@@ -47,19 +63,6 @@ export function PlayerBanner({
     );
   }
 
-  useEffect(() => {
-    if (!walletAmount) {
-      aptosClient
-        .getAccountResource({
-          accountAddress: gameState?.players[playerIndex].id,
-          resourceType: "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
-        })
-        .then((accountResource) => {
-          setWalletAmount(toAptos(Number(accountResource.coin.value)));
-        });
-    }
-  }, []);
-
   const playerBet = Number(gameState.players[playerIndex].current_bet);
   const playerCards = gameState.players[playerIndex].hand;
   const playerStatus = gameState.players[playerIndex].status;
@@ -69,25 +72,15 @@ export function PlayerBanner({
       <div className={classnames(width, "mx-7 relative bottom-0")}>
         {playerIndex == currentIndex && <TurnToken position={position} />}
 
-        <div className={classnames()}>
-          {playerBet > 0 && <Stack stack={playerBet} />}
-        </div>
-        {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && (
-          <PlayerCards cards={cards} />
-        )}
+        <div className={classnames()}>{playerBet > 0 && <Stack stack={playerBet} />}</div>
+        {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && <PlayerCards cards={cards} />}
         <div
           className={classnames(
             "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
             width
           )}
         >
-          <Image
-            src="/player-avatar.svg"
-            alt="Avatar"
-            width={81}
-            height={81}
-            className=""
-          />
+          <Image src="/player-avatar.svg" alt="Avatar" width={81} height={81} className="" />
           <div className="text-white flex flex-col justify-between py-2">
             <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
             <div>
@@ -97,12 +90,7 @@ export function PlayerBanner({
               </div>
 
               <div className="flex gap-x-1 text-xs">
-                <Image
-                  src="/trophy-icon.svg"
-                  height="13"
-                  width="13"
-                  alt="icon"
-                />
+                <Image src="/trophy-icon.svg" height="13" width="13" alt="icon" />
                 <span>2/20</span>
               </div>
             </div>
@@ -125,22 +113,14 @@ export function PlayerBanner({
       >
         {playerBet > 0 && <Stack stack={playerBet} />}
       </div>
-      {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && (
-        <PlayerCards cards={cards} />
-      )}
+      {playerCards.length == 2 && playerStatus !== PlayerStatus.Folded && <PlayerCards cards={cards} />}
       <div
         className={classnames(
           "rounded-[50px] h-[87px] border bg-gradient-to-r z-[2] from-cyan-400 to-[#0F172A] border-cyan-400 relative w-full flex",
           width
         )}
       >
-        <Image
-          src="/player-avatar.svg"
-          alt="Avatar"
-          width={81}
-          height={81}
-          className=""
-        />
+        <Image src="/player-avatar.svg" alt="Avatar" width={81} height={81} className="" />
         <div className="text-white flex flex-col justify-center py-2">
           <h1 className="font-bold text-sm">Player {playerIndex + 1}</h1>
           <div>
