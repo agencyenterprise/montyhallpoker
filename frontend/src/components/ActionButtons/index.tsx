@@ -158,6 +158,7 @@ export function ActionButtons({
         <input
           className="text-center bg-[#0F172A] text-white w-[100px] h-auto min-h-full rounded-[10px] border border-cyan-400"
           value={toAptos(raiseValue).toFixed(2)}
+          readOnly
         />
         <Button onClick={() => setRaiseValue((prev) => prev + stake)}>+</Button>
       </div>
@@ -172,12 +173,7 @@ export function ActionButtons({
         {currentBet > 0 && raiseValue == currentBet && (
           <Button
             className="w-full"
-            onClick={() =>
-              performAction(
-                ACTIONS.CALL,
-                Number(currentBet - +gameState!.players[meIndex].current_bet)
-              )
-            }
+            onClick={() => performAction(ACTIONS.CALL, 0)}
           >
             Call
           </Button>
@@ -185,9 +181,7 @@ export function ActionButtons({
         {raiseValue > 0 && raiseValue !== currentBet && (
           <Button
             className="w-full"
-            onClick={() =>
-              performAction(ACTIONS.RAISE, raiseValue - currentBet)
-            }
+            onClick={() => performAction(ACTIONS.RAISE, raiseValue)}
           >
             Raise
           </Button>

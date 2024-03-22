@@ -7,7 +7,7 @@ import { Card, PlayerCards } from "../PlayerCards";
 import { StackIcon } from "../Icons";
 import { Stack } from "../Stack";
 import { getAptosClient, toAptos } from "@/utils/aptosClient";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const aptosClient = getAptosClient();
 interface PlayerBannerProps {
@@ -46,15 +46,20 @@ export function PlayerBanner({
       </div>
     );
   }
-  aptosClient
-    .getAccountResource({
-      accountAddress: gameState?.players[playerIndex].id,
-      resourceType: "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
-    })
-    .then((accountResource) => {
-      setWalletAmount(toAptos(Number(accountResource.coin.value)));
-    });
-  // const balance = accountResource.data.coin.value;
+
+  useEffect(() => {
+    if (!walletAmount) {
+      aptosClient
+        .getAccountResource({
+          accountAddress: gameState?.players[playerIndex].id,
+          resourceType: "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+        })
+        .then((accountResource) => {
+          setWalletAmount(toAptos(Number(accountResource.coin.value)));
+        });
+    }
+  }, []);
+
   const playerBet = Number(gameState.players[playerIndex].current_bet);
   const playerCards = gameState.players[playerIndex].hand;
   const playerStatus = gameState.players[playerIndex].status;
