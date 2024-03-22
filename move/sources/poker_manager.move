@@ -27,7 +27,7 @@ module poker::poker_manager {
     const ETABLE_IS_FULL: u64 = 7;
     const EALREADY_IN_GAME: u64 = 8;
     const EGAME_NOT_READY: u64 = 9;
-    const EINSUFFICIENT_BALANCE_FOR_STAKE: u64 = 10;
+    const ESTAKE_MISMATCH: u64 = 10;
     const ENOT_IN_GAME: u64 = 11;
     const EINVALID_CARD: u64 = 12;
     const ERAISE_TOO_LOW: u64 = 13;
@@ -49,7 +49,6 @@ module poker::poker_manager {
     const CHECK: u64 = 1;
     const CALL: u64 = 2;
     const RAISE: u64 = 3;
-    const ALL_IN: u64 = 4;
 
     // Stages
     const STAGE_PREFLOP: u8 = 0;
@@ -446,7 +445,7 @@ module poker::poker_manager {
 
         assert!(game_metadata.state == GAMESTATE_OPEN, EGAME_NOT_OPEN);
 
-        assert!(amount >= game_metadata.stake, EINSUFFICIENT_BALANCE_FOR_STAKE);
+        assert!(amount == game_metadata.stake, ESTAKE_MISMATCH);
         
         aptos_account::transfer(from, @poker, amount);
 
@@ -627,7 +626,14 @@ module poker::poker_manager {
 
             vector::push_back(&mut game_metadata.winners, winner_addr);
 
+            debug::print(&string::utf8(b"Amount on admin account: "));
+            debug::print(&coin::balance<AptosCoin>(@poker));
+
             aptos_account::transfer(from, winner_addr, (winnerRewardDivided as u64));
+            debug::print(&string::utf8(b"Transferred to winner: "));
+            debug::print(&winner_addr);
+            debug::print(&string::utf8(b"Amount: "));
+            debug::print(&winnerRewardDivided);
             k = k + 1;
         };
         debug::print(&string::utf8(b"Game metadata: "));
@@ -671,8 +677,10 @@ module poker::poker_manager {
         let addr = signer::address_of(from);
         assert_is_initialized();
 
-        debug::print(&string::utf8(b"Performing action"));
+        assert!(action >= FOLD && action <= RAISE, EINVALID_MOVE);
 
+        debug::print(&string::utf8(b"Performing action"));
+        
         let gamestate = borrow_global_mut<GameState>(@poker);
         assert!(simple_map::contains_key(&gamestate.games, &game_id), EINVALID_GAME);
 
@@ -713,36 +721,42 @@ module poker::poker_manager {
             assert!(game_metadata.current_bet == 0, EINVALID_MOVE);
             player.checked = true;
         } else if (action == CALL) {
-            // assert that attempted bet + player's current bet is equal to current bet
-            assert!(amount == game_metadata.current_bet - player.current_bet, EINVALID_MOVE);
+            debug::print(&string::utf8(b"Call ANNY"));
             let diff = game_metadata.current_bet - player.current_bet;
-            assert!(diff <= amount, EINVALID_MOVE);
+            debug::print(&string::utf8(b"Current bet: "));
+            debug::print(&game_metadata.current_bet);
+            debug::print(&string::utf8(b"Player current bet: "));
+            debug::print(&player.current_bet);
+            debug::print(&string::utf8(b"Diff: "));
+            debug::print(&diff);
             player.current_bet = player.current_bet + diff;
             game_metadata.pot = game_metadata.pot + diff;
+            aptos_account::transfer(from, @poker, diff);
         } else if (action == RAISE) {
-
+            debug::print(&string::utf8(b"Raise HERE"));
             // Player can only raise to a maximum equal to the lowest balance of the other players
             let max_raise = get_max_raise_for(addr, &players);
-            assert!(amount <= max_raise, ERAISE_TOO_HIGH);
+            assert!(player.current_bet + amount <= max_raise, ERAISE_TOO_HIGH);
+            assert!(player.current_bet + amount >= game_metadata.current_bet, ERAISE_TOO_LOW);
 
             // Raise has to be at least current bet + stake
-            assert!(amount >= game_metadata.current_bet + game_metadata.stake, ERAISE_TOO_LOW);
+            assert!(amount >= game_metadata.stake, ERAISE_TOO_LOW);
+
             player.current_bet = player.current_bet + amount;
+
+            game_metadata.current_bet = player.current_bet;
+
             game_metadata.pot = game_metadata.pot + amount;
-            game_metadata.current_bet = amount;
+
+            aptos_account::transfer(from, @poker, amount);
+
             game_metadata.lastRaiser = option::some<LastRaiser>(LastRaiser{playerId: addr, playerMove: action});
-        } else if (action == ALL_IN) {
-            player.current_bet = player.current_bet + amount;
-            game_metadata.pot = game_metadata.pot + amount;
-            game_metadata.current_bet = amount;
-            player.status = STATUS_ALL_IN;
         };
 
         if (action != CHECK) {
             player.checked = false;
         };
 
-        aptos_account::transfer(from, @poker, amount);
         game_metadata.last_action_timestamp = timestamp::now_seconds();
 
         let activePlayers = 0;
@@ -844,6 +858,26 @@ module poker::poker_manager {
 
         let currentPlayer = vector::borrow_mut(&mut game_metadata.players, (game_metadata.currentPlayerIndex as u64));
         currentPlayer.status = STATUS_FOLDED;
+
+        let activePlayers = 0;
+        let i = 0;
+        let lastActivePlayerIndex = 0;
+        while (i < vector::length(&game_metadata.players)) {
+            let player = vector::borrow(&game_metadata.players, i);
+            if (player.status == STATUS_ACTIVE) {
+                activePlayers = activePlayers + 1;
+                lastActivePlayerIndex = i;
+            };
+            i = i + 1;
+        };
+
+        if (activePlayers == 1) {
+            game_metadata.stage = STAGE_SHOWDOWN;
+            return
+        } else if (activePlayers == 0) {
+            game_metadata.state = GAMESTATE_CLOSED;
+            return
+        };
         
         let nextPlayer = vector::borrow(&game_metadata.players, ((game_metadata.currentPlayerIndex as u64) + 1) % vector::length(&game_metadata.players));
         game_metadata.turn = nextPlayer.id;
@@ -1289,9 +1323,12 @@ module poker::poker_manager {
 
         // Simulate Joining
         join_game(account1, 1, 5000000);
-        join_game(account2, 1, 6000000);
-        join_game(account3, 1, 7000000);
-        join_game(account4, 1, 8000000);
+        join_game(account2, 1, 5000000);
+        join_game(account3, 1, 5000000);
+        join_game(account4, 1, 5000000);
+
+        debug::print(&string::utf8(b"Amount on admin account START: "));
+        debug::print(&coin::balance<AptosCoin>(@poker));
 
         let game_metadata = get_game_metadata_by_id(game_id);
 
@@ -1326,10 +1363,13 @@ module poker::poker_manager {
             perform_action(account1, game_id, CALL, 8000000);
             perform_action(account2, game_id, RAISE, 20000000);
             perform_action(account3, game_id, FOLD, 0);
-            perform_action(account4, game_id, CALL, 20000000 - 8000000);
+            perform_action(account4, game_id, CALL, 0);
             perform_action(account1, game_id, FOLD, 0);
             
             let game_metadata = get_game_metadata_by_id(game_id);
+
+            debug::print(&string::utf8(b"Game METADATA 2: "));
+            debug::print(&game_metadata);
 
             assert!(game_metadata.stage == STAGE_FLOP, EINVALID_GAME);
         };
@@ -1366,7 +1406,9 @@ module poker::poker_manager {
             //perform_action(account1, game_id, FOLD, 13000000);
             perform_action(account2, game_id, RAISE, 18000000);
             //perform_action(account3, game_id, CALL, 18000000);
-            perform_action(account4, game_id, CALL, 5000000);
+            perform_action(account4, game_id, RAISE, 20000000);
+            perform_action(account2, game_id, CALL, 20000000);
+            
             //perform_action(account1, game_id, CALL, 18000000);
 
             let game_metadata = get_game_metadata_by_id(game_id);
