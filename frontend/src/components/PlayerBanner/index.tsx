@@ -34,7 +34,7 @@ export function PlayerBanner({
   const playerIndex = index;
 
   useEffect(() => {
-    if (!walletAmount && aptosClient) {
+    if (aptosClient) {
       aptosClient
         ?.getAccountResource({
           accountAddress: gameState?.players[playerIndex].id,
